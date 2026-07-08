@@ -120,11 +120,13 @@ WebUI chat sessions execute Hermes tools inside the WebUI container. The install
 
 ## Browserless resource knobs
 
-The installer enforces minimum Browserless concurrency values for reliable WebUI browser tools:
+Repo defaults are lab-friendly:
 
 ```bash
-BROWSER_CONCURRENT=6
-BROWSER_QUEUED=20
+BROWSER_CONCURRENT=1
+BROWSER_QUEUED=10
+MODEL_NAME=gpt-5.5
+ENABLE_TRAEFIK_BASIC_AUTH=false
 ```
 
-Lower values can make Browserless queue CDP handshakes and produce `CDP call timed out ... opening handshake` during full-page screenshot runs.
+For heavier WebUI screenshot/browser workflows, increase `BROWSER_CONCURRENT` if Browserless queueing causes `CDP call timed out ... opening handshake`.

@@ -77,3 +77,8 @@ The scripts avoid passing plaintext passwords as command-line arguments to `open
 `maintain.sh rotate-passwords --generate` writes `.rendered/rotated-credentials-*.txt` with mode `0600` for the same reason.
 
 `.rendered/` is gitignored. Treat these files as secrets and remove them after storing values in a password manager.
+
+
+## Default edge authentication
+
+The repo default is `ENABLE_TRAEFIK_BASIC_AUTH=false`. Enable it explicitly for public environments where an additional Traefik edge BasicAuth layer is desired. Dashboard internal authentication remains independent.

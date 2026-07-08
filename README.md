@@ -95,14 +95,14 @@ Important variables:
 | `WEBUI_HOST` | Public WebUI FQDN |
 | `DASHBOARD_HOST` | Public dashboard FQDN |
 | `TLS_SECRET_NAME` | Optional TLS secret name if your Ingress uses one |
-| `ENABLE_TRAEFIK_BASIC_AUTH` | Enable optional outer Traefik BasicAuth middleware, default `true` |
+| `ENABLE_TRAEFIK_BASIC_AUTH` | Enable optional outer Traefik BasicAuth middleware, default `false` |
 | `BASIC_AUTH_USER` | Outer Ingress BasicAuth username when Traefik BasicAuth is enabled |
 | `BASIC_AUTH_PASSWORD` | Outer Ingress BasicAuth password when Traefik BasicAuth is enabled |
 | `DASHBOARD_AUTH_USER` | Dashboard internal BasicAuth username |
 | `DASHBOARD_AUTH_PASSWORD` | Dashboard internal BasicAuth password |
 | `HERMES_PASSWORD_POLICY` | `production` or `lab` for `maintain.sh rotate-passwords` |
 | `MODEL_PROVIDER` | Initial Hermes provider, default `codex` |
-| `MODEL_NAME` | Initial model, default `o4-mini` |
+| `MODEL_NAME` | Initial model, default `gpt-5.5` |
 | `HERMES_AGENT_IMAGE` | Agent image |
 | `HERMES_WEBUI_IMAGE` | WebUI image |
 | `HERMES_BROWSER_IMAGE` | Browserless image |
@@ -256,4 +256,4 @@ The installer prepares this by copying `node` from the Agent image into `/opt/da
 
 ## Browserless concurrency
 
-WebUI browser-tool workflows can open several short-lived CDP sessions in one agent run. The installer enforces a minimum `BROWSER_CONCURRENT=6` and `BROWSER_QUEUED=20` even if lower values are provided, because `BROWSER_CONCURRENT=2` can cause Browserless queueing and Hermes-side `CDP call timed out during opening handshake` errors.
+Repo defaults are intentionally lab-friendly: `BROWSER_CONCURRENT=1`, `BROWSER_QUEUED=10`, `MODEL_NAME=gpt-5.5`, and `ENABLE_TRAEFIK_BASIC_AUTH=false`. For heavier WebUI screenshot/browser workflows, raise `BROWSER_CONCURRENT` if Browserless queueing causes `CDP call timed out during opening handshake`.

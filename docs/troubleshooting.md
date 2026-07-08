@@ -130,13 +130,11 @@ Symptom:
 CDP call timed out after 10.0s: timed out during opening handshake
 ```
 
-If Browserless `/pressure` shows `running` equal to `maxConcurrent` and `queued > 0`, Browserless is saturated. WebUI screenshot/browser workflows may open multiple short-lived CDP sessions in one run, so `BROWSER_CONCURRENT=2` is too low.
-
-Fix in this installer: `install.sh` enforces a minimum:
+If Browserless `/pressure` shows `running` equal to `maxConcurrent` and `queued > 0`, Browserless is saturated. The repo default is intentionally small for lab use:
 
 ```bash
-BROWSER_CONCURRENT=6
-BROWSER_QUEUED=20
+BROWSER_CONCURRENT=1
+BROWSER_QUEUED=10
 ```
 
-Then it restarts Agent, Dashboard, WebUI, and Browserless so refreshed Secret/env values take effect.
+For full-page WebUI screenshot workflows, raise `BROWSER_CONCURRENT` when needed, then rerun `./install.sh`. The installer restarts Agent, Dashboard, WebUI, and Browserless so refreshed Secret/env values take effect.

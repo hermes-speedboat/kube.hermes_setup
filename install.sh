@@ -47,7 +47,7 @@ validate() {
 prepare_defaults() {
   export HERMES_NAMESPACE="${HERMES_NAMESPACE:-hermes}"
   export INGRESS_CLASS_NAME="${INGRESS_CLASS_NAME:-traefik}"
-  export ENABLE_TRAEFIK_BASIC_AUTH="${ENABLE_TRAEFIK_BASIC_AUTH:-${ENABLE_TRAEFIK_MIDDLEWARE:-true}}"
+  export ENABLE_TRAEFIK_BASIC_AUTH="${ENABLE_TRAEFIK_BASIC_AUTH:-${ENABLE_TRAEFIK_MIDDLEWARE:-false}}"
   export TRAEFIK_ENTRYPOINT="${TRAEFIK_ENTRYPOINT:-websecure}"
   export TLS_ENABLED="${TLS_ENABLED:-true}"
   export TLS_SECRET_NAME="${TLS_SECRET_NAME:-}"
@@ -60,25 +60,20 @@ prepare_defaults() {
   export HERMES_RUNTIME_GID="${HERMES_RUNTIME_GID:-10000}"
   export STORAGE_CLASS_NAME="${STORAGE_CLASS_NAME:-}"
   export MODEL_PROVIDER="${MODEL_PROVIDER:-codex}"
-  export MODEL_NAME="${MODEL_NAME:-o4-mini}"
+  export MODEL_NAME="${MODEL_NAME:-gpt-5.5}"
   export BASIC_AUTH_USER="${BASIC_AUTH_USER:-admin}"
   export BASIC_AUTH_PASSWORD="${BASIC_AUTH_PASSWORD:-$(rand_hex 18)}"
   export DASHBOARD_AUTH_USER="${DASHBOARD_AUTH_USER:-admin}"
   export DASHBOARD_AUTH_PASSWORD="${DASHBOARD_AUTH_PASSWORD:-$(rand_hex 18)}"
   export API_SERVER_KEY="${API_SERVER_KEY:-$(rand_hex 32)}"
   export BROWSER_TOKEN="${BROWSER_TOKEN:-$(rand_hex 32)}"
-  export BROWSER_CONCURRENT="${BROWSER_CONCURRENT:-6}"
-  export BROWSER_QUEUED="${BROWSER_QUEUED:-20}"
+  export BROWSER_CONCURRENT="${BROWSER_CONCURRENT:-1}"
+  export BROWSER_QUEUED="${BROWSER_QUEUED:-10}"
   export BROWSER_TIMEOUT_MS="${BROWSER_TIMEOUT_MS:-300000}"
   [[ "$BROWSER_CONCURRENT" =~ ^[0-9]+$ ]] || fail "BROWSER_CONCURRENT must be numeric"
   [[ "$BROWSER_QUEUED" =~ ^[0-9]+$ ]] || fail "BROWSER_QUEUED must be numeric"
-  if (( BROWSER_CONCURRENT < 6 )); then
-    warn "BROWSER_CONCURRENT=$BROWSER_CONCURRENT is too low for WebUI browser-tool workflows; raising to 6 to avoid CDP handshake queue timeouts."
-    export BROWSER_CONCURRENT=6
-  fi
-  if (( BROWSER_QUEUED < 20 )); then
-    warn "BROWSER_QUEUED=$BROWSER_QUEUED is low for WebUI browser-tool workflows; raising to 20."
-    export BROWSER_QUEUED=20
+  if (( BROWSER_CONCURRENT < 3 )); then
+    warn "BROWSER_CONCURRENT=$BROWSER_CONCURRENT is the repo default/lab setting; full-page WebUI screenshot workflows can require a higher value if CDP handshakes queue."
   fi
   export BROWSER_CDP_URL="ws://hermes-browser:3000/chromium?token=${BROWSER_TOKEN}"
   [[ "$HERMES_RUNTIME_UID" =~ ^[0-9]+$ ]] || fail "HERMES_RUNTIME_UID must be numeric"
