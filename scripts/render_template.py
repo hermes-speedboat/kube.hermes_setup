@@ -22,11 +22,41 @@ for host_var in ("WEBUI_HOST", "DASHBOARD_HOST"):
     replacement = f"tls:\n  - hosts:\n    - {host}\n    secretName: {tls_secret}" if tls_secret else ""
     tpl = tpl.replace(block, replacement)
 
+
+def truthy(value: str) -> bool:
+    return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+namespace = os.environ.get("HERMES_NAMESPACE", "hermes")
+if truthy(os.environ.get("ENABLE_TRAEFIK_BASIC_AUTH", os.environ.get("ENABLE_TRAEFIK_MIDDLEWARE", "false"))):
+    tpl = tpl.replace("${TRAEFIK_BASIC_AUTH_MIDDLEWARE}", """apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: hermes-basic-auth
+  namespace: ${HERMES_NAMESPACE}
+spec:
+  basicAuth:
+    secret: hermes-basic-auth-users
+---""")
+    tpl = tpl.replace("${WEBUI_BASIC_AUTH_ANNOTATION}", f"    traefik.ingress.kubernetes.io/router.middlewares: {namespace}-hermes-basic-auth@kubernetescrd")
+    tpl = tpl.replace("${DASHBOARD_BASIC_AUTH_ANNOTATION}", f"    traefik.ingress.kubernetes.io/router.middlewares: {namespace}-hermes-basic-auth@kubernetescrd")
+    tpl = tpl.replace("${DASHBOARD_LOGIN_MIDDLEWARE_ANNOTATION}", f"    traefik.ingress.kubernetes.io/router.middlewares: {namespace}-hermes-basic-auth@kubernetescrd,{namespace}-hermes-dashboard-login-rewrite@kubernetescrd")
+else:
+    tpl = tpl.replace("${TRAEFIK_BASIC_AUTH_MIDDLEWARE}\n", "")
+    tpl = tpl.replace("${TRAEFIK_BASIC_AUTH_MIDDLEWARE}", "")
+    tpl = tpl.replace("${WEBUI_BASIC_AUTH_ANNOTATION}\n", "")
+    tpl = tpl.replace("${WEBUI_BASIC_AUTH_ANNOTATION}", "")
+    tpl = tpl.replace("${DASHBOARD_BASIC_AUTH_ANNOTATION}\n", "")
+    tpl = tpl.replace("${DASHBOARD_BASIC_AUTH_ANNOTATION}", "")
+    tpl = tpl.replace("${DASHBOARD_LOGIN_MIDDLEWARE_ANNOTATION}", f"    traefik.ingress.kubernetes.io/router.middlewares: {namespace}-hermes-dashboard-login-rewrite@kubernetescrd")
+
 pattern = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-(.*?))?\}")
+
 
 def repl(match: re.Match[str]) -> str:
     name, default = match.group(1), match.group(2)
     return os.environ.get(name, default or "")
+
 
 out = pattern.sub(repl, tpl)
 leftovers = re.findall(r"\$\{[^}]+\}", out)

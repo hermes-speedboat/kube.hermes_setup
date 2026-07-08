@@ -16,6 +16,10 @@ Internet
   |
   v
 Ingress Controller / TLS
+  |
+  +-- optional Traefik BasicAuth middleware
+  |     secret/hermes-basic-auth-users (htpasswd users file)
+  |
   |-- WEBUI_HOST      -> hermes-webui:8787
   |-- DASHBOARD_HOST  -> hermes-dashboard:9119
 
@@ -50,7 +54,7 @@ On the admin workstation:
 - `bash`
 - Kubernetes context with permissions to create namespace-scoped resources
 - Ingress controller compatible with standard Kubernetes Ingress
-- Traefik CRDs if `ENABLE_TRAEFIK_MIDDLEWARE=true`
+- Traefik CRDs if `ENABLE_TRAEFIK_BASIC_AUTH=true`
 
 Optional but recommended:
 
@@ -89,17 +93,47 @@ Important variables:
 | `WEBUI_HOST` | Public WebUI FQDN |
 | `DASHBOARD_HOST` | Public dashboard FQDN |
 | `TLS_SECRET_NAME` | Optional TLS secret name if your Ingress uses one |
-| `BASIC_AUTH_USER` | Outer Ingress BasicAuth username |
-| `BASIC_AUTH_PASSWORD` | Outer Ingress BasicAuth password |
+| `ENABLE_TRAEFIK_BASIC_AUTH` | Enable optional outer Traefik BasicAuth middleware, default `true` |
+| `BASIC_AUTH_USER` | Outer Ingress BasicAuth username when Traefik BasicAuth is enabled |
+| `BASIC_AUTH_PASSWORD` | Outer Ingress BasicAuth password when Traefik BasicAuth is enabled |
 | `DASHBOARD_AUTH_USER` | Dashboard internal BasicAuth username |
 | `DASHBOARD_AUTH_PASSWORD` | Dashboard internal BasicAuth password |
+| `HERMES_PASSWORD_POLICY` | `production` or `lab` for `maintain.sh rotate-passwords` |
 | `MODEL_PROVIDER` | Initial Hermes provider, default `codex` |
 | `MODEL_NAME` | Initial model, default `o4-mini` |
 | `HERMES_AGENT_IMAGE` | Agent image |
 | `HERMES_WEBUI_IMAGE` | WebUI image |
 | `HERMES_BROWSER_IMAGE` | Browserless image |
 
-Secrets may be generated automatically by `install.sh` when variables are omitted.
+Secrets may be generated automatically by `install.sh` when variables are omitted. The generated/used initial values are written to `.rendered/generated-credentials.txt` with mode `0600`; this path is gitignored, but you should still move the values to a password manager and delete the file after installation.
+
+### Authentication layers
+
+There are two independent authentication layers:
+
+1. **Optional Traefik Ingress BasicAuth** in front of WebUI and Dashboard.
+   - Controlled by `ENABLE_TRAEFIK_BASIC_AUTH=true|false`.
+   - Implemented as a Traefik `Middleware` plus an `htpasswd`-style Kubernetes Secret.
+   - Recommended for public Internet exposure.
+   - Often disabled in trusted labs, VPN-only environments, or when another upstream auth proxy already protects the Ingress.
+2. **Dashboard internal BasicAuth** inside Hermes Dashboard.
+   - Always configured by this installer.
+   - Uses `DASHBOARD_AUTH_USER` / `DASHBOARD_AUTH_PASSWORD`.
+
+Password rotation reads values from environment variables or asks interactively with hidden prompts:
+
+```bash
+# Interactive; production policy by default
+./maintain.sh rotate-passwords [--lab] [--generate] [--skip-ingress] [--skip-dashboard]
+
+# Lab: allow simple passwords after explicit opt-in
+./maintain.sh rotate-passwords --lab
+
+# Non-interactive / CI
+BASIC_AUTH_PASSWORD='...' DASHBOARD_AUTH_PASSWORD='...' ./maintain.sh rotate-passwords [--lab] [--generate] [--skip-ingress] [--skip-dashboard]
+```
+
+Production mode rejects weak passwords by default. Lab mode is explicit because accidental weak public credentials are how horror stories begin.
 
 ## Repository layout
 
@@ -146,7 +180,7 @@ $EDITOR hermes.env
 ./maintain.sh backup ./backups/hermes-$(date -u +%Y%m%dT%H%M%SZ).tgz
 ./maintain.sh restore ./backups/hermes-YYYYmmddTHHMMSSZ.tgz
 ./maintain.sh upgrade
-./maintain.sh rotate-passwords
+./maintain.sh rotate-passwords [--lab] [--generate] [--skip-ingress] [--skip-dashboard]
 ./maintain.sh rotate-browser-token
 ./maintain.sh restart
 ```
@@ -195,7 +229,7 @@ Back up `/opt/data` to preserve Codex auth across destructive rebuilds.
 - Do not put real `BROWSER_CDP_URL` values into `config.yaml`; it contains a token.
 - Browserless has no public Ingress.
 - Browserless access is token-protected and NetworkPolicy-restricted.
-- Ingress BasicAuth is optional but strongly recommended if the cluster is public.
+- Traefik Ingress BasicAuth is optional (`ENABLE_TRAEFIK_BASIC_AUTH`) but strongly recommended if the cluster is public.
 - Dashboard has its own internal BasicAuth in addition to optional Ingress BasicAuth.
 
 ## License

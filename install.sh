@@ -11,6 +11,18 @@ warn() { printf '\033[1;33mWARN:\033[0m %s\n' "$*" >&2; }
 fail() { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 require_cmd() { command -v "$1" >/dev/null 2>&1 || fail "Missing required command: $1"; }
 rand_hex() { openssl rand -hex "${1:-32}"; }
+write_generated_credentials() {
+  mkdir -p "$RENDER_DIR"
+  chmod 700 "$RENDER_DIR"
+  local out="$RENDER_DIR/generated-credentials.txt"
+  {
+    printf "BASIC_AUTH_USER=%s\nBASIC_AUTH_PASSWORD=%s\n" "$BASIC_AUTH_USER" "$BASIC_AUTH_PASSWORD"
+    printf "DASHBOARD_AUTH_USER=%s\nDASHBOARD_AUTH_PASSWORD=%s\n" "$DASHBOARD_AUTH_USER" "$DASHBOARD_AUTH_PASSWORD"
+    printf "API_SERVER_KEY=%s\n" "$API_SERVER_KEY"
+    printf "BROWSER_TOKEN=%s\n" "$BROWSER_TOKEN"
+  } > "$out"
+  chmod 600 "$out"
+}
 
 load_env() {
   if [[ ! -f "$ENV_FILE" ]]; then
@@ -35,7 +47,7 @@ validate() {
 prepare_defaults() {
   export HERMES_NAMESPACE="${HERMES_NAMESPACE:-hermes}"
   export INGRESS_CLASS_NAME="${INGRESS_CLASS_NAME:-traefik}"
-  export ENABLE_TRAEFIK_MIDDLEWARE="${ENABLE_TRAEFIK_MIDDLEWARE:-true}"
+  export ENABLE_TRAEFIK_BASIC_AUTH="${ENABLE_TRAEFIK_BASIC_AUTH:-${ENABLE_TRAEFIK_MIDDLEWARE:-true}}"
   export TRAEFIK_ENTRYPOINT="${TRAEFIK_ENTRYPOINT:-websecure}"
   export TLS_ENABLED="${TLS_ENABLED:-true}"
   export TLS_SECRET_NAME="${TLS_SECRET_NAME:-}"
@@ -70,28 +82,50 @@ create_namespace_and_secrets() {
   log "Creating namespace and secrets"
   kubectl create namespace "$HERMES_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 
-  local basic_hash
-  basic_hash="$(openssl passwd -apr1 "$BASIC_AUTH_PASSWORD")"
-  kubectl -n "$HERMES_NAMESPACE" create secret generic hermes-basic-auth-users \
-    --from-literal=users="${BASIC_AUTH_USER}:${basic_hash}" \
-    --dry-run=client -o yaml | kubectl apply -f -
+  if [[ "$ENABLE_TRAEFIK_BASIC_AUTH" =~ ^(1|true|TRUE|yes|YES|on|ON)$ ]]; then
+    local basic_hash tmpdir
+    basic_hash="$(printf '%s\n' "$BASIC_AUTH_PASSWORD" | openssl passwd -apr1 -stdin)"
+    tmpdir="$(mktemp -d)"
+    chmod 700 "$tmpdir"
+      printf '%s:%s\n' "$BASIC_AUTH_USER" "$basic_hash" > "$tmpdir/users"
+    kubectl -n "$HERMES_NAMESPACE" create secret generic hermes-basic-auth-users \
+      --from-file=users="$tmpdir/users" \
+      --dry-run=client -o yaml | kubectl apply -f -
+    rm -rf "$tmpdir"
+  else
+    warn "Traefik Ingress BasicAuth is disabled. Dashboard internal auth remains enabled."
+  fi
 
+  local dash_tmpdir
+  dash_tmpdir="$(mktemp -d)"
+  chmod 700 "$dash_tmpdir"
+  printf '%s' "$DASHBOARD_AUTH_USER" > "$dash_tmpdir/username"
+  printf '%s' "$DASHBOARD_AUTH_PASSWORD" > "$dash_tmpdir/password"
   kubectl -n "$HERMES_NAMESPACE" create secret generic hermes-dashboard-auth \
-    --from-literal=username="$DASHBOARD_AUTH_USER" \
-    --from-literal=password="$DASHBOARD_AUTH_PASSWORD" \
+    --from-file=username="$dash_tmpdir/username" \
+    --from-file=password="$dash_tmpdir/password" \
     --dry-run=client -o yaml | kubectl apply -f -
+  rm -rf "$dash_tmpdir"
+
+  local secret_tmpdir
+  secret_tmpdir="$(mktemp -d)"
+  chmod 700 "$secret_tmpdir"
+  printf '%s' "$API_SERVER_KEY" > "$secret_tmpdir/api-key"
+  printf '%s' "$BROWSER_TOKEN" > "$secret_tmpdir/token"
+  printf '%s' "$BROWSER_CDP_URL" > "$secret_tmpdir/BROWSER_CDP_URL"
 
   kubectl -n "$HERMES_NAMESPACE" create secret generic hermes-api-server \
-    --from-literal=api-key="$API_SERVER_KEY" \
+    --from-file=api-key="$secret_tmpdir/api-key" \
     --dry-run=client -o yaml | kubectl apply -f -
 
   kubectl -n "$HERMES_NAMESPACE" create secret generic hermes-browser-token \
-    --from-literal=token="$BROWSER_TOKEN" \
+    --from-file=token="$secret_tmpdir/token" \
     --dry-run=client -o yaml | kubectl apply -f -
 
   kubectl -n "$HERMES_NAMESPACE" create secret generic hermes-browser-cdp \
-    --from-literal=BROWSER_CDP_URL="$BROWSER_CDP_URL" \
+    --from-file=BROWSER_CDP_URL="$secret_tmpdir/BROWSER_CDP_URL" \
     --dry-run=client -o yaml | kubectl apply -f -
+  rm -rf "$secret_tmpdir"
 }
 
 apply_and_wait() {
@@ -113,10 +147,14 @@ Namespace:        $HERMES_NAMESPACE
 WebUI host:       $WEBUI_HOST
 Dashboard host:   $DASHBOARD_HOST
 Browser CDP:      ws://hermes-browser:3000/chromium?token=<redacted>
+Ingress BasicAuth: ${ENABLE_TRAEFIK_BASIC_AUTH}
 Rendered file:    $MANIFEST_OUT
 
 Generated/used credentials were applied as Kubernetes Secrets only.
-If passwords were auto-generated, capture them from your shell environment or rotate them with:
+A local credential capture file was written to .rendered/generated-credentials.txt with mode 600.
+Move those values to your password manager and delete the file after use.
+
+Rotate later with:
 
   ./maintain.sh rotate-passwords
 
@@ -136,6 +174,7 @@ main() {
   validate
   prepare_defaults
   render_manifest
+  write_generated_credentials
   create_namespace_and_secrets
   apply_and_wait
   print_summary

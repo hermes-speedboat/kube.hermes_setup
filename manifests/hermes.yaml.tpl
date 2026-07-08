@@ -27,15 +27,7 @@ spec:
     requests:
       storage: ${HERMES_WORKSPACE_STORAGE_SIZE}
 ---
-apiVersion: traefik.io/v1alpha1
-kind: Middleware
-metadata:
-  name: hermes-basic-auth
-  namespace: ${HERMES_NAMESPACE}
-spec:
-  basicAuth:
-    secret: hermes-basic-auth-users
----
+${TRAEFIK_BASIC_AUTH_MIDDLEWARE}
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
@@ -547,7 +539,7 @@ metadata:
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: ${TRAEFIK_ENTRYPOINT}
     traefik.ingress.kubernetes.io/router.tls: "${TLS_ENABLED}"
-    traefik.ingress.kubernetes.io/router.middlewares: ${HERMES_NAMESPACE}-hermes-basic-auth@kubernetescrd
+${WEBUI_BASIC_AUTH_ANNOTATION}
 spec:
   ingressClassName: ${INGRESS_CLASS_NAME}
   ${TLS_SECRET_NAME:+tls:
@@ -574,7 +566,7 @@ metadata:
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: ${TRAEFIK_ENTRYPOINT}
     traefik.ingress.kubernetes.io/router.tls: "${TLS_ENABLED}"
-    traefik.ingress.kubernetes.io/router.middlewares: ${HERMES_NAMESPACE}-hermes-basic-auth@kubernetescrd
+${DASHBOARD_BASIC_AUTH_ANNOTATION}
 spec:
   ingressClassName: ${INGRESS_CLASS_NAME}
   ${TLS_SECRET_NAME:+tls:
@@ -601,7 +593,7 @@ metadata:
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: ${TRAEFIK_ENTRYPOINT}
     traefik.ingress.kubernetes.io/router.tls: "${TLS_ENABLED}"
-    traefik.ingress.kubernetes.io/router.middlewares: ${HERMES_NAMESPACE}-hermes-basic-auth@kubernetescrd,${HERMES_NAMESPACE}-hermes-dashboard-login-rewrite@kubernetescrd
+${DASHBOARD_LOGIN_MIDDLEWARE_ANNOTATION}
 spec:
   ingressClassName: ${INGRESS_CLASS_NAME}
   rules:

@@ -53,11 +53,46 @@ This includes OAuth state, sessions, skills, memories, workspace files, and WebU
 
 ## Password rotation
 
+`maintain.sh rotate-passwords` supports three safe input modes:
+
+1. **Environment variables** for automation/CI.
+2. **Interactive hidden prompts** for humans.
+3. **Generated values** with `--generate` for break-glass rotation.
+
+Recommended interactive production rotation:
+
 ```bash
-BASIC_AUTH_USER=admin DASHBOARD_AUTH_USER=admin ./maintain.sh rotate-passwords
+./maintain.sh rotate-passwords
 ```
 
-The command prints generated passwords. Store them in a password manager.
+Non-interactive rotation:
+
+```bash
+BASIC_AUTH_USER=admin BASIC_AUTH_PASSWORD='use-a-long-random-value' DASHBOARD_AUTH_USER=admin DASHBOARD_AUTH_PASSWORD='use-another-long-random-value' ./maintain.sh rotate-passwords
+```
+
+Lab rotation with simple passwords:
+
+```bash
+./maintain.sh rotate-passwords --lab
+```
+
+or:
+
+```bash
+HERMES_PASSWORD_POLICY=lab BASIC_AUTH_PASSWORD='labpass' DASHBOARD_AUTH_PASSWORD='labpass' ./maintain.sh rotate-passwords
+```
+
+Useful partial rotations:
+
+```bash
+./maintain.sh rotate-passwords --skip-ingress      # dashboard only
+./maintain.sh rotate-passwords --skip-dashboard    # Traefik BasicAuth only
+```
+
+Production policy rejects weak passwords by default. Use `--lab`, `HERMES_PASSWORD_POLICY=lab`, or `HERMES_ALLOW_WEAK_PASSWORD=true` only for lab systems.
+
+Plaintext passwords are not printed for env/prompt mode. With `--generate`, the generated values are written to a gitignored `.rendered/rotated-credentials-*.txt` file with mode `0600`; move them to your password manager and delete the file.
 
 ## Browser token rotation
 
