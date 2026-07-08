@@ -22,6 +22,8 @@ Pin image tags in `hermes.env`, then run:
 ./doctor.sh
 ```
 
+`install.sh` is re-runnable. It recreates the one-shot `hermes-init-config` Job before applying the manifest so Kubernetes Job immutability does not break upgrades/retries.
+
 For a pull-latest style restart:
 
 ```bash

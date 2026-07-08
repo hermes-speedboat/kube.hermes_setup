@@ -47,7 +47,8 @@ spec:
     spec:
       restartPolicy: OnFailure
       securityContext:
-        fsGroup: 1000
+        fsGroup: ${HERMES_RUNTIME_GID}
+        fsGroupChangePolicy: OnRootMismatch
       containers:
       - name: init
         image: busybox:1.36
@@ -79,7 +80,7 @@ spec:
               printf '%s\n' 'A real Chromium browser is available through Hermes browser tools via the `BROWSER_CDP_URL` environment variable. Use browser tools for real UI/web verification, especially WebUI issues, JavaScript-rendered pages, login flows, Ingress checks, screenshots, browser console errors, and reproducing frontend problems. Use curl for HTTP status/headers/health endpoints, but do not rely only on curl for UI problems. Never print the full `BROWSER_CDP_URL`; it contains a token.'
             } > /opt/data/SOUL.md
           fi
-          chown -R 1000:1000 /opt/data /workspace
+          chown -R ${HERMES_RUNTIME_UID}:${HERMES_RUNTIME_GID} /opt/data /workspace
           chmod 700 /opt/data
         volumeMounts:
         - name: home
@@ -111,7 +112,23 @@ spec:
         app: hermes-agent
     spec:
       securityContext:
-        fsGroup: 1000
+        fsGroup: ${HERMES_RUNTIME_GID}
+        fsGroupChangePolicy: OnRootMismatch
+      initContainers:
+      - name: prepare-permissions
+        image: busybox:1.36
+        command: ["sh", "-c"]
+        args:
+        - |
+          set -eu
+          mkdir -p /opt/data /workspace
+          chown -R ${HERMES_RUNTIME_UID}:${HERMES_RUNTIME_GID} /opt/data /workspace
+          chmod 700 /opt/data
+        volumeMounts:
+        - name: home
+          mountPath: /opt/data
+        - name: workspace
+          mountPath: /workspace
       containers:
       - name: hermes-agent
         image: ${HERMES_AGENT_IMAGE}
@@ -191,7 +208,23 @@ spec:
         app: hermes-dashboard
     spec:
       securityContext:
-        fsGroup: 1000
+        fsGroup: ${HERMES_RUNTIME_GID}
+        fsGroupChangePolicy: OnRootMismatch
+      initContainers:
+      - name: prepare-permissions
+        image: busybox:1.36
+        command: ["sh", "-c"]
+        args:
+        - |
+          set -eu
+          mkdir -p /opt/data /workspace
+          chown -R ${HERMES_RUNTIME_UID}:${HERMES_RUNTIME_GID} /opt/data /workspace
+          chmod 700 /opt/data
+        volumeMounts:
+        - name: home
+          mountPath: /opt/data
+        - name: workspace
+          mountPath: /workspace
       containers:
       - name: hermes-dashboard
         image: ${HERMES_AGENT_IMAGE}
@@ -275,8 +308,24 @@ spec:
         app: hermes-webui
     spec:
       securityContext:
-        fsGroup: 1000
+        fsGroup: ${HERMES_RUNTIME_GID}
+        fsGroupChangePolicy: OnRootMismatch
       initContainers:
+      - name: prepare-webui-state
+        image: busybox:1.36
+        command: ["sh", "-c"]
+        args:
+        - |
+          set -eu
+          mkdir -p /opt/data/webui /workspace
+          chown -R ${HERMES_RUNTIME_UID}:${HERMES_RUNTIME_GID} /opt/data /workspace
+          chmod 700 /opt/data
+          chmod 700 /opt/data/webui
+        volumeMounts:
+        - name: home
+          mountPath: /opt/data
+        - name: workspace
+          mountPath: /workspace
       - name: copy-agent-source
         image: ${HERMES_AGENT_IMAGE}
         imagePullPolicy: Always
@@ -285,7 +334,7 @@ spec:
         - >-
           set -eu;
           cp -a /opt/hermes/. /agent-src/;
-          chown -R 1000:1000 /agent-src;
+          chown -R ${HERMES_RUNTIME_UID}:${HERMES_RUNTIME_GID} /agent-src;
           chmod -R go-w /agent-src
         volumeMounts:
         - name: hermes-agent-src
@@ -323,9 +372,9 @@ spec:
               name: hermes-browser-cdp
               key: BROWSER_CDP_URL
         - name: WANTED_UID
-          value: "1000"
+          value: "${HERMES_RUNTIME_UID}"
         - name: WANTED_GID
-          value: "1000"
+          value: "${HERMES_RUNTIME_GID}"
         volumeMounts:
         - name: home
           mountPath: /opt/data

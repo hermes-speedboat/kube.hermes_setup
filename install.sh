@@ -56,6 +56,8 @@ prepare_defaults() {
   export HERMES_BROWSER_IMAGE="${HERMES_BROWSER_IMAGE:-ghcr.io/browserless/chromium:latest}"
   export HERMES_HOME_STORAGE_SIZE="${HERMES_HOME_STORAGE_SIZE:-10Gi}"
   export HERMES_WORKSPACE_STORAGE_SIZE="${HERMES_WORKSPACE_STORAGE_SIZE:-20Gi}"
+  export HERMES_RUNTIME_UID="${HERMES_RUNTIME_UID:-10000}"
+  export HERMES_RUNTIME_GID="${HERMES_RUNTIME_GID:-10000}"
   export STORAGE_CLASS_NAME="${STORAGE_CLASS_NAME:-}"
   export MODEL_PROVIDER="${MODEL_PROVIDER:-codex}"
   export MODEL_NAME="${MODEL_NAME:-o4-mini}"
@@ -69,6 +71,8 @@ prepare_defaults() {
   export BROWSER_QUEUED="${BROWSER_QUEUED:-10}"
   export BROWSER_TIMEOUT_MS="${BROWSER_TIMEOUT_MS:-300000}"
   export BROWSER_CDP_URL="ws://hermes-browser:3000/chromium?token=${BROWSER_TOKEN}"
+  [[ "$HERMES_RUNTIME_UID" =~ ^[0-9]+$ ]] || fail "HERMES_RUNTIME_UID must be numeric"
+  [[ "$HERMES_RUNTIME_GID" =~ ^[0-9]+$ ]] || fail "HERMES_RUNTIME_GID must be numeric"
 }
 
 render_manifest() {
@@ -129,8 +133,21 @@ create_namespace_and_secrets() {
 }
 
 apply_and_wait() {
+  log "Recreating init job if it already exists"
+  kubectl -n "$HERMES_NAMESPACE" delete job hermes-init-config --ignore-not-found=true --wait=true >/dev/null
+
   log "Applying manifest"
   kubectl apply -f "$MANIFEST_OUT"
+
+  log "Waiting for init config job"
+  kubectl -n "$HERMES_NAMESPACE" wait --for=condition=complete job/hermes-init-config --timeout=300s
+
+  log "Restarting deployments to pick up refreshed secrets"
+  kubectl -n "$HERMES_NAMESPACE" rollout restart \
+    deploy/hermes-agent \
+    deploy/hermes-dashboard \
+    deploy/hermes-webui \
+    deploy/hermes-browser >/dev/null
 
   log "Waiting for rollouts"
   for d in hermes-agent hermes-dashboard hermes-webui hermes-browser; do

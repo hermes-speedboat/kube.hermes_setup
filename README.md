@@ -34,6 +34,7 @@ hermes-agent
 hermes-webui
   - /opt/data PVC
   - /workspace PVC
+  - initContainer prepares /opt/data/webui ownership for the configured runtime UID/GID
   - initContainer copies Hermes Agent source into an emptyDir
   - HERMES_WEBUI_AGENT_DIR=/home/hermeswebui/.hermes/hermes-agent
   - BROWSER_CDP_URL -> secret/hermes-browser-cdp
@@ -104,6 +105,7 @@ Important variables:
 | `HERMES_AGENT_IMAGE` | Agent image |
 | `HERMES_WEBUI_IMAGE` | WebUI image |
 | `HERMES_BROWSER_IMAGE` | Browserless image |
+| `HERMES_RUNTIME_UID`, `HERMES_RUNTIME_GID` | Shared PVC owner for Agent/Dashboard/WebUI, default `10000` |
 
 Secrets may be generated automatically by `install.sh` when variables are omitted. The generated/used initial values are written to `.rendered/generated-credentials.txt` with mode `0600`; this path is gitignored, but you should still move the values to a password manager and delete the file after installation.
 
@@ -235,3 +237,10 @@ Back up `/opt/data` to preserve Codex auth across destructive rebuilds.
 ## License
 
 MIT. See [LICENCE](LICENCE).
+
+
+## Runtime UID/GID and shared PVC ownership
+
+The Agent, Dashboard, and WebUI share the `hermes-home` PVC at `/opt/data`. Current `nousresearch/hermes-agent` images prepare that directory as UID/GID `10000`, so the installer defaults `HERMES_RUNTIME_UID=10000` and `HERMES_RUNTIME_GID=10000` and passes those values to the WebUI as `WANTED_UID` / `WANTED_GID`.
+
+If you pin images with different runtime ownership, set both variables explicitly in `hermes.env` before running `install.sh`.

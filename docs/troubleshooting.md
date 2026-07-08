@@ -52,3 +52,44 @@ hermes model
 ```
 
 See `docs/codex-auth.md`.
+
+
+## WebUI cannot create `/opt/data/webui`
+
+Symptom:
+
+```text
+mkdir: cannot create directory '/opt/data': Permission denied
+!! ERROR: Failed to create state directory at /opt/data/webui
+```
+
+Cause: the WebUI container runs as the configured runtime UID/GID, but a freshly provisioned PVC can initially be owned by root. `fsGroup` alone is not reliable enough across all storage classes, and deployments may start before a one-shot config job finishes preparing the shared PVC.
+
+Fix in this installer: the WebUI deployment has a `prepare-webui-state` initContainer that mounts the same PVCs, creates `/opt/data/webui`, and chowns `/opt/data` and `/workspace` to the configured runtime UID/GID before the WebUI process starts. Agent and Dashboard also have `prepare-permissions` initContainers for the same reason.
+
+If you still see the error after upgrading the installer, restart the deployment:
+
+```bash
+kubectl -n "$HERMES_NAMESPACE" rollout restart deploy/hermes-webui
+kubectl -n "$HERMES_NAMESPACE" rollout status deploy/hermes-webui --timeout=600s
+```
+
+
+## UID/GID mismatch on shared PVCs
+
+Symptom: WebUI init succeeds, but the main container still fails with `/opt/data` permission errors.
+
+Check ownership:
+
+```bash
+kubectl -n "$HERMES_NAMESPACE" exec deploy/hermes-agent -- sh -lc 'id; ls -ldn /opt/data /workspace'
+```
+
+Current Hermes Agent images commonly prepare `/opt/data` as `10000:10000`. The installer therefore defaults:
+
+```bash
+HERMES_RUNTIME_UID=10000
+HERMES_RUNTIME_GID=10000
+```
+
+These values are used for initContainer `chown`, Pod `fsGroup`, and WebUI `WANTED_UID` / `WANTED_GID`. If you use images with different ownership, set both variables in `hermes.env` and rerun `./install.sh`.
