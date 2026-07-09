@@ -283,14 +283,15 @@ DASHBOARD_AUTH_PASSWORD=%s
     fi
     confirm_weak_password_if_interactive "Dashboard internal password" "$dashboard_pass"
     apply_dashboard_auth_secret "$dashboard_user" "$dashboard_pass"
-    kubectl -n "$HERMES_NAMESPACE" rollout restart deploy/hermes-dashboard
+    kubectl -n "$HERMES_NAMESPACE" rollout restart deploy/hermes-dashboard deploy/hermes-webui
     kubectl -n "$HERMES_NAMESPACE" rollout status deploy/hermes-dashboard --timeout=300s
+    kubectl -n "$HERMES_NAMESPACE" rollout status deploy/hermes-webui --timeout=300s
   fi
 
   cat <<EOF
 Rotated requested password secrets.
 Ingress BasicAuth:   $([[ "$rotate_ingress" -eq 1 ]] && echo "updated for user '$basic_user'" || echo "skipped")
-Dashboard BasicAuth: $([[ "$rotate_dashboard" -eq 1 ]] && echo "updated for user '$dashboard_user'" || echo "skipped")
+Dashboard/WebUI:    $([[ "$rotate_dashboard" -eq 1 ]] && echo "updated for dashboard user '$dashboard_user'; WebUI password uses the same secret" || echo "skipped")
 
 Plaintext passwords were not printed. Store env-provided/generated values in your password manager.
 For lab passwords use --lab or HERMES_PASSWORD_POLICY=lab explicitly.

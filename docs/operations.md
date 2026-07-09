@@ -130,3 +130,14 @@ ENABLE_TRAEFIK_BASIC_AUTH=false
 ```
 
 For heavier WebUI screenshot/browser workflows, increase `BROWSER_CONCURRENT` if Browserless queueing causes `CDP call timed out ... opening handshake`.
+
+
+## WebUI password uses the Dashboard password secret
+
+The WebUI container receives:
+
+```yaml
+HERMES_WEBUI_PASSWORD <- secret/hermes-dashboard-auth:password
+```
+
+So the WebUI login password is the same value as `DASHBOARD_AUTH_PASSWORD`. This avoids the remote first-password setup gate safely because WebUI auth is enabled at startup. When `maintain.sh rotate-passwords` rotates the dashboard password, it also restarts `hermes-webui` so the env-backed Secret value is reloaded.

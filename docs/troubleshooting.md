@@ -138,3 +138,26 @@ BROWSER_QUEUED=10
 ```
 
 For full-page WebUI screenshot workflows, raise `BROWSER_CONCURRENT` when needed, then rerun `./install.sh`. The installer restarts Agent, Dashboard, WebUI, and Browserless so refreshed Secret/env values take effect.
+
+
+## WebUI: `First password setup is only available from local networks`
+
+Current Hermes WebUI intentionally rejects unauthenticated remote first-password setup unless the operator sets:
+
+```bash
+HERMES_WEBUI_ONBOARDING_OPEN=1
+```
+
+This is a bootstrap escape hatch, not a good steady-state setting for public deployments.
+
+This installer avoids the problem by setting WebUI auth at process start:
+
+```yaml
+HERMES_WEBUI_PASSWORD:
+  valueFrom:
+    secretKeyRef:
+      name: hermes-dashboard-auth
+      key: password
+```
+
+That means the WebUI password is the same as `DASHBOARD_AUTH_PASSWORD`. If the value is rotated, rerun `./maintain.sh rotate-passwords` or restart `deploy/hermes-webui` after updating the Secret so the env value is reloaded.

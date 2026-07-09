@@ -374,6 +374,11 @@ spec:
           value: /home/hermeswebui/.hermes/hermes-agent
         - name: HERMES_WEBUI_AUTO_INSTALL
           value: "1"
+        - name: HERMES_WEBUI_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: hermes-dashboard-auth
+              key: password
         - name: PATH
           value: /opt/data/node/bin:/opt/data/node_modules/.bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         - name: HERMES_API_URL

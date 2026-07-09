@@ -33,12 +33,13 @@ Never print the full value in logs or docs.
 
 ## Ingress authentication
 
-The setup has two separate auth layers:
+The setup has three separate auth layers:
 
 | Layer | Scope | Controlled by | Notes |
 |---|---|---|---|
 | Traefik Ingress BasicAuth | WebUI + Dashboard edge access | `ENABLE_TRAEFIK_BASIC_AUTH=true|false` | Optional, recommended for public exposure |
 | Hermes Dashboard BasicAuth | Dashboard application login | `DASHBOARD_AUTH_USER` / `DASHBOARD_AUTH_PASSWORD` | Always configured |
+| Hermes WebUI password auth | WebUI application login | `HERMES_WEBUI_PASSWORD` from `secret/hermes-dashboard-auth:password` | Always configured |
 
 Traefik BasicAuth follows the normal Traefik pattern: an `htpasswd`-style users file stored in a Kubernetes Secret and referenced by a Traefik `Middleware` on the Ingress.
 
@@ -82,3 +83,20 @@ The scripts avoid passing plaintext passwords as command-line arguments to `open
 ## Default edge authentication
 
 The repo default is `ENABLE_TRAEFIK_BASIC_AUTH=false`. Enable it explicitly for public environments where an additional Traefik edge BasicAuth layer is desired. Dashboard internal authentication remains independent.
+
+
+## WebUI first-password bootstrap
+
+Current Hermes WebUI intentionally blocks unauthenticated remote first-password setup unless the operator sets:
+
+```bash
+HERMES_WEBUI_ONBOARDING_OPEN=1
+```
+
+This installer does **not** set that escape hatch by default. Instead, it enables WebUI password auth at process start by injecting:
+
+```yaml
+HERMES_WEBUI_PASSWORD <- secret/hermes-dashboard-auth:password
+```
+
+The WebUI password is therefore the same value as `DASHBOARD_AUTH_PASSWORD`. `HERMES_WEBUI_ONBOARDING_OPEN=1` should only be used as a temporary, operator-controlled bootstrap exception when you intentionally manage WebUI password setup yourself.

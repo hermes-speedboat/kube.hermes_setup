@@ -99,7 +99,7 @@ Important variables:
 | `BASIC_AUTH_USER` | Outer Ingress BasicAuth username when Traefik BasicAuth is enabled |
 | `BASIC_AUTH_PASSWORD` | Outer Ingress BasicAuth password when Traefik BasicAuth is enabled |
 | `DASHBOARD_AUTH_USER` | Dashboard internal BasicAuth username |
-| `DASHBOARD_AUTH_PASSWORD` | Dashboard internal BasicAuth password |
+| `DASHBOARD_AUTH_PASSWORD` | Dashboard internal BasicAuth password; also used as WebUI password via `HERMES_WEBUI_PASSWORD` |
 | `HERMES_PASSWORD_POLICY` | `production` or `lab` for `maintain.sh rotate-passwords` |
 | `MODEL_PROVIDER` | Initial Hermes provider, default `codex` |
 | `MODEL_NAME` | Initial model, default `gpt-5.5` |
@@ -112,7 +112,7 @@ Secrets may be generated automatically by `install.sh` when variables are omitte
 
 ### Authentication layers
 
-There are two independent authentication layers:
+There are three independent authentication layers:
 
 1. **Optional Traefik Ingress BasicAuth** in front of WebUI and Dashboard.
    - Controlled by `ENABLE_TRAEFIK_BASIC_AUTH=true|false`.
@@ -122,6 +122,10 @@ There are two independent authentication layers:
 2. **Dashboard internal BasicAuth** inside Hermes Dashboard.
    - Always configured by this installer.
    - Uses `DASHBOARD_AUTH_USER` / `DASHBOARD_AUTH_PASSWORD`.
+3. **WebUI built-in password auth** inside Hermes WebUI.
+   - Always configured by this installer.
+   - Uses the same password Secret as Dashboard: `HERMES_WEBUI_PASSWORD` is read from `secret/hermes-dashboard-auth:password`.
+   - This avoids the remote first-password setup gate without setting `HERMES_WEBUI_ONBOARDING_OPEN=1`.
 
 Password rotation reads values from environment variables or asks interactively with hidden prompts:
 
