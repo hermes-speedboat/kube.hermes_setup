@@ -66,7 +66,7 @@ Optional but recommended:
 ## Quick start
 
 ```bash
-git clone https://github.com/hermes-speedboat/kube.hermes_setup.git
+git clone https://github.com/Bitbull-Ideas/kube.hermes_setup.git
 cd kube.hermes_setup
 cp examples/hermes.env.example hermes.env
 $EDITOR hermes.env
