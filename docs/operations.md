@@ -152,3 +152,24 @@ So the WebUI login password is the same value as `DASHBOARD_AUTH_PASSWORD`. This
 ## Doctor and Browserless concurrency
 
 With `BROWSER_CONCURRENT=1`, `doctor.sh` skips active CDP navigation and only reports Browserless pressure. A single Hermes browser navigation can open multiple CDP WebSockets, so an active health-test navigation can queue behind itself at concurrency 1. Increase `BROWSER_CONCURRENT` for screenshot-heavy testing or production-like browser workflows.
+
+
+## WebUI upload size
+
+The installer sets:
+
+```bash
+HERMES_WEBUI_MAX_UPLOAD_MB=220
+```
+
+This overrides the upstream WebUI default of 20MiB. Change the value in `hermes.env` and rerun `./install.sh` to update the WebUI deployment.
+
+
+## Kubernetes resource knobs
+
+The manifest resource requests/limits are configurable through `HERMES_*_CPU_REQUEST`, `HERMES_*_MEMORY_REQUEST`, `HERMES_*_CPU_LIMIT`, and `HERMES_*_MEMORY_LIMIT` variables for Agent, Dashboard, WebUI, and Browser. Defaults stay conservative, but cramped lab clusters can lower requests in their env file.
+
+
+## Deployment update strategy
+
+Deployment update strategy is `Recreate` for the four single-replica components. This avoids surge Pods during `install.sh`/secret refresh restarts, which can otherwise deadlock rollouts on small single-node K3s clusters with tight CPU requests.

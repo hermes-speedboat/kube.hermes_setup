@@ -100,3 +100,13 @@ HERMES_WEBUI_PASSWORD <- secret/hermes-dashboard-auth:password
 ```
 
 The WebUI password is therefore the same value as `DASHBOARD_AUTH_PASSWORD`. `HERMES_WEBUI_ONBOARDING_OPEN=1` should only be used as a temporary, operator-controlled bootstrap exception when you intentionally manage WebUI password setup yourself.
+
+
+## Upload size
+
+`HERMES_WEBUI_MAX_UPLOAD_MB` controls the WebUI upload cap. The default is 220MiB in this installer. Larger caps increase memory/disk pressure because uploads are parsed server-side; raise deliberately and monitor resource usage.
+
+
+## API server key length
+
+Hermes Agent refuses to start the API server when `API_SERVER_KEY` is a placeholder or shorter than 16 characters. `install.sh` therefore generates a strong replacement if a too-short value is inherited from the environment. Use a high-entropy value such as `openssl rand -hex 32` for explicit production configuration.

@@ -107,6 +107,7 @@ Important variables:
 | `HERMES_WEBUI_IMAGE` | WebUI image |
 | `HERMES_BROWSER_IMAGE` | Browserless image |
 | `HERMES_RUNTIME_UID`, `HERMES_RUNTIME_GID` | Shared PVC owner for Agent/Dashboard/WebUI, default `10000` |
+| `HERMES_WEBUI_MAX_UPLOAD_MB` | WebUI upload cap in MiB, default `220` |
 
 Secrets may be generated automatically by `install.sh` when variables are omitted. The generated/used initial values are written to `.rendered/generated-credentials.txt` with mode `0600`; this path is gitignored, but you should still move the values to a password manager and delete the file after installation.
 
@@ -264,3 +265,13 @@ The installer prepares this by copying `node` from the Agent image into `/opt/da
 ## Browserless concurrency
 
 Repo defaults are intentionally lab-friendly: `BROWSER_CONCURRENT=1`, `BROWSER_QUEUED=10`, `MODEL_NAME=gpt-5.5`, and `ENABLE_TRAEFIK_BASIC_AUTH=false`. For heavier WebUI screenshot/browser workflows, raise `BROWSER_CONCURRENT` if Browserless queueing causes `CDP call timed out during opening handshake`.
+
+
+## WebUI upload size
+
+Upstream Hermes WebUI defaults file uploads to 20MiB via `MAX_UPLOAD_BYTES`. This installer sets `HERMES_WEBUI_MAX_UPLOAD_MB=220` by default so 200MB-class documents can be uploaded with multipart overhead through the WebUI. Increase the value explicitly in `hermes.env` if needed and rerun `./install.sh`.
+
+
+## Kubernetes resource knobs
+
+The manifest resource requests/limits are configurable through `HERMES_*_CPU_REQUEST`, `HERMES_*_MEMORY_REQUEST`, `HERMES_*_CPU_LIMIT`, and `HERMES_*_MEMORY_LIMIT` variables for Agent, Dashboard, WebUI, and Browser. Defaults stay conservative, but cramped lab clusters can lower requests in their env file.

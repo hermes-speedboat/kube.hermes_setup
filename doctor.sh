@@ -109,6 +109,23 @@ check_webui_agent_source() {
   fi
 }
 
+
+check_webui_upload_limit() {
+  local pod expected actual
+  expected="${HERMES_WEBUI_MAX_UPLOAD_MB:-220}"
+  pod="$(kubectl -n "$HERMES_NAMESPACE" get pods -l app=hermes-webui --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+  [[ -n "$pod" ]] || { fail "no running hermes-webui pod"; return; }
+  actual="$(kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -lc '/app/venv/bin/python - <<PY
+from api.config import MAX_UPLOAD_BYTES
+print(MAX_UPLOAD_BYTES // 1024 // 1024)
+PY' 2>/dev/null || true)"
+  if [[ "$actual" == "$expected" ]]; then
+    ok "WebUI upload limit ${actual}MiB"
+  else
+    fail "WebUI upload limit expected ${expected}MiB but got '${actual:-unknown}'"
+  fi
+}
+
 check_external() {
   if [[ -n "$WEBUI_HOST" ]]; then
     local code
@@ -141,6 +158,7 @@ main() {
   check_rollouts
   check_internal_health
   check_webui_agent_source
+  check_webui_upload_limit
   check_browser_cdp
   check_external
   check_codex_auth

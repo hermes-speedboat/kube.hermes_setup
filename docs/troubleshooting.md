@@ -186,3 +186,35 @@ If you want new random values, use:
 ```
 
 This separation prevents a fake rotation where `maintain.sh` silently reapplies the old password from `hermes.env`.
+
+
+## WebUI upload fails around 20MB
+
+Upstream Hermes WebUI defaults `MAX_UPLOAD_BYTES` to 20MiB and exposes the override as:
+
+```bash
+HERMES_WEBUI_MAX_UPLOAD_MB=220
+```
+
+This installer injects that variable into the WebUI deployment. Verify the effective value:
+
+```bash
+kubectl -n "$HERMES_NAMESPACE" exec deploy/hermes-webui -- sh -lc '
+  /app/venv/bin/python - <<"PY"
+from api.config import MAX_UPLOAD_BYTES
+print(MAX_UPLOAD_BYTES)
+PY'
+```
+
+Expected for the default: `230686720` bytes.
+
+
+## Agent refuses API server key
+
+Symptom in `hermes-agent` logs:
+
+```text
+API_SERVER_KEY is a placeholder or too short (<16 chars)
+```
+
+Cause: a weak `API_SERVER_KEY` was inherited from the environment or env file. Current `install.sh` generates a strong replacement when the value is shorter than 16 characters. Rerun `./install.sh` and wait for `deploy/hermes-agent` to roll out.

@@ -27,6 +27,7 @@ BROWSER_CONCURRENT=1
 BROWSER_QUEUED=10
 HERMES_RUNTIME_UID=10000
 HERMES_RUNTIME_GID=10000
+HERMES_WEBUI_MAX_UPLOAD_MB=220
 ```
 
 Rationale:
@@ -288,6 +289,11 @@ BROWSER_CONCURRENT=2 ./install.sh
 
 If `hermes.env` still contains `BROWSER_CONCURRENT=1`, it can override shell assumptions depending on how the script is invoked. Check rendered Deployment env, not your memory. Memory lies. YAML lies more politely.
 
+
+## WebUI upload limit pitfall
+
+Upstream Hermes WebUI defaults uploads to 20MiB (`MAX_UPLOAD_BYTES`). This installer must set `HERMES_WEBUI_MAX_UPLOAD_MB=220` in the WebUI container so users can upload larger files. If uploads fail around 20MB, verify the WebUI pod env and `api.config.MAX_UPLOAD_BYTES`.
+
 ## Troubleshooting cheat sheet
 
 ### WebUI cannot write `/opt/data/webui`
@@ -409,3 +415,18 @@ When you change this repo, report:
 - any blockers or assumptions
 
 Be concise, factual, and do not claim tests passed unless they actually ran.
+
+
+## API server key pitfall
+
+Hermes Agent refuses to start the API server if `API_SERVER_KEY` is a placeholder or shorter than 16 characters. The installer should never propagate such a value from a local shell/env file into Kubernetes; generate a strong replacement instead.
+
+
+## Kubernetes resource knobs
+
+The manifest resource requests/limits are configurable through `HERMES_*_CPU_REQUEST`, `HERMES_*_MEMORY_REQUEST`, `HERMES_*_CPU_LIMIT`, and `HERMES_*_MEMORY_LIMIT` variables for Agent, Dashboard, WebUI, and Browser. Defaults stay conservative, but cramped lab clusters can lower requests in their env file.
+
+
+## Deployment update strategy
+
+Deployment update strategy is `Recreate` for the four single-replica components. This avoids surge Pods during `install.sh`/secret refresh restarts, which can otherwise deadlock rollouts on small single-node K3s clusters with tight CPU requests.
