@@ -147,3 +147,8 @@ HERMES_WEBUI_PASSWORD <- secret/hermes-dashboard-auth:password
 ```
 
 So the WebUI login password is the same value as `DASHBOARD_AUTH_PASSWORD`. This avoids the remote first-password setup gate safely because WebUI auth is enabled at startup. When `maintain.sh rotate-passwords` rotates the dashboard password, it also restarts `hermes-webui` so the env-backed Secret value is reloaded.
+
+
+## Doctor and Browserless concurrency
+
+With `BROWSER_CONCURRENT=1`, `doctor.sh` skips active CDP navigation and only reports Browserless pressure. A single Hermes browser navigation can open multiple CDP WebSockets, so an active health-test navigation can queue behind itself at concurrency 1. Increase `BROWSER_CONCURRENT` for screenshot-heavy testing or production-like browser workflows.

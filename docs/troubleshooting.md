@@ -137,6 +137,8 @@ BROWSER_CONCURRENT=1
 BROWSER_QUEUED=10
 ```
 
+With `BROWSER_CONCURRENT=1`, an active `browser_navigate()` health test can deadlock itself because Hermes/agent-browser may open more than one CDP WebSocket for a single navigation. `doctor.sh` therefore treats `maxConcurrent < 2` as a lab-constrained configuration and skips the active navigation check with a warning instead of failing/hanging.
+
 For full-page WebUI screenshot workflows, raise `BROWSER_CONCURRENT` when needed, then rerun `./install.sh`. The installer restarts Agent, Dashboard, WebUI, and Browserless so refreshed Secret/env values take effect.
 
 

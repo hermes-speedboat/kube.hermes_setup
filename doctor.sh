@@ -71,6 +71,10 @@ PY
         warn "browserless has queued CDP sessions; skipping active navigation test to avoid doctor hanging"
         return 0
       fi
+      if [[ "${max_concurrent:-}" =~ ^[0-9]+$ && "$max_concurrent" -lt 2 ]]; then
+        warn "browserless maxConcurrent=${max_concurrent}; skipping active navigation test because Hermes browser_navigate can open multiple CDP sessions"
+        return 0
+      fi
       if [[ "${running:-}" =~ ^[0-9]+$ && "${max_concurrent:-}" =~ ^[0-9]+$ && "$max_concurrent" -gt 0 && "$running" -ge "$max_concurrent" ]]; then
         warn "browserless is at concurrency limit (${running}/${max_concurrent}); skipping active navigation test"
         return 0
