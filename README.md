@@ -127,20 +127,23 @@ There are three independent authentication layers:
    - Uses the same password Secret as Dashboard: `HERMES_WEBUI_PASSWORD` is read from `secret/hermes-dashboard-auth:password`.
    - This avoids the remote first-password setup gate without setting `HERMES_WEBUI_ONBOARDING_OPEN=1`.
 
-Password rotation reads values from environment variables or asks interactively with hidden prompts:
+Password rotation has explicit input modes. Interactive runs prompt by default and do **not** silently reuse password values from `hermes.env`:
 
 ```bash
-# Interactive; production policy by default
-./maintain.sh rotate-passwords [--lab] [--generate] [--skip-ingress] [--skip-dashboard]
+# Ask for all selected passwords interactively; production policy by default
+./maintain.sh rotate-passwords --prompt
 
-# Lab: allow simple passwords after explicit opt-in
-./maintain.sh rotate-passwords --lab
+# Dashboard + WebUI only, lab password allowed, hidden prompt
+./maintain.sh rotate-passwords --lab --skip-ingress --prompt
 
-# Non-interactive / CI
-BASIC_AUTH_PASSWORD='...' DASHBOARD_AUTH_PASSWORD='...' ./maintain.sh rotate-passwords [--lab] [--generate] [--skip-ingress] [--skip-dashboard]
+# Generate random values for selected targets and write them to .rendered/rotated-credentials-*.txt
+./maintain.sh rotate-passwords --generate
+
+# Non-interactive / CI: explicitly read from environment variables
+BASIC_AUTH_PASSWORD='***' DASHBOARD_AUTH_PASSWORD='***' ./maintain.sh rotate-passwords --from-env
 ```
 
-Production mode rejects weak passwords by default. Lab mode is explicit because accidental weak public credentials are how horror stories begin.
+Use `--only-ingress`, `--only-dashboard`, `--skip-ingress`, and `--skip-dashboard` to choose exactly which passwords are changed. Production mode rejects weak passwords by default. Lab mode is explicit because accidental weak public credentials are how horror stories begin.
 
 ## Repository layout
 
@@ -187,7 +190,7 @@ $EDITOR hermes.env
 ./maintain.sh backup ./backups/hermes-$(date -u +%Y%m%dT%H%M%SZ).tgz
 ./maintain.sh restore ./backups/hermes-YYYYmmddTHHMMSSZ.tgz
 ./maintain.sh upgrade
-./maintain.sh rotate-passwords [--lab] [--generate] [--skip-ingress] [--skip-dashboard]
+./maintain.sh rotate-passwords [--lab] [--prompt|--generate|--from-env] [--skip-ingress] [--skip-dashboard]
 ./maintain.sh rotate-browser-token
 ./maintain.sh restart
 ```

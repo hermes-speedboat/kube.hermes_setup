@@ -161,3 +161,26 @@ HERMES_WEBUI_PASSWORD:
 ```
 
 That means the WebUI password is the same as `DASHBOARD_AUTH_PASSWORD`. If the value is rotated, rerun `./maintain.sh rotate-passwords` or restart `deploy/hermes-webui` after updating the Secret so the env value is reloaded.
+
+
+## `rotate-passwords` did not ask for a password
+
+Current behavior: interactive runs should prompt by default. To be explicit, use:
+
+```bash
+./maintain.sh rotate-passwords --lab --skip-ingress --prompt
+```
+
+If you want to apply values from environment variables or `hermes.env`, use:
+
+```bash
+./maintain.sh rotate-passwords --from-env
+```
+
+If you want new random values, use:
+
+```bash
+./maintain.sh rotate-passwords --generate
+```
+
+This separation prevents a fake rotation where `maintain.sh` silently reapplies the old password from `hermes.env`.

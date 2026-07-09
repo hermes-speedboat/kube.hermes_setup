@@ -75,7 +75,7 @@ The scripts avoid passing plaintext passwords as command-line arguments to `open
 
 `install.sh` writes `.rendered/generated-credentials.txt` with mode `0600` so operators can save generated initial values before deleting the file.
 
-`maintain.sh rotate-passwords --generate` writes `.rendered/rotated-credentials-*.txt` with mode `0600` for the same reason.
+`maintain.sh rotate-passwords --generate` writes `.rendered/rotated-credentials-*.txt` with mode `0600` for the same reason. Interactive rotation prompts by default and does not silently reuse password values from `hermes.env`; use `--from-env` explicitly for CI/env-driven changes.
 
 `.rendered/` is gitignored. Treat these files as secrets and remove them after storing values in a password manager.
 

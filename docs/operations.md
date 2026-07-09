@@ -55,41 +55,47 @@ This includes OAuth state, sessions, skills, memories, workspace files, and WebU
 
 ## Password rotation
 
-`maintain.sh rotate-passwords` supports three safe input modes:
+`maintain.sh rotate-passwords` supports three explicit input modes:
 
-1. **Environment variables** for automation/CI.
-2. **Interactive hidden prompts** for humans.
-3. **Generated values** with `--generate` for break-glass rotation.
+1. **Interactive hidden prompts** with `--prompt` — default when stdin is a TTY.
+2. **Generated values** with `--generate` — writes new random values to `.rendered/rotated-credentials-*.txt`.
+3. **Environment variables** with `--from-env` — intended for automation/CI.
 
-Recommended interactive production rotation:
+Important: interactive rotation does **not** silently reuse password values from `hermes.env`. If a password is present in the env file and you want to apply exactly that value, say so explicitly with `--from-env`.
+
+Interactive rotation:
 
 ```bash
-./maintain.sh rotate-passwords
+./maintain.sh rotate-passwords --prompt
 ```
 
-Non-interactive rotation:
+Dashboard + WebUI only, lab password allowed:
 
 ```bash
-BASIC_AUTH_USER=admin BASIC_AUTH_PASSWORD='use-a-long-random-value' DASHBOARD_AUTH_USER=admin DASHBOARD_AUTH_PASSWORD='use-another-long-random-value' ./maintain.sh rotate-passwords
+./maintain.sh rotate-passwords --lab --skip-ingress --prompt
+# or
+./maintain.sh rotate-passwords --lab --only-dashboard --prompt
 ```
 
-Lab rotation with simple passwords:
+Generate new random values:
 
 ```bash
-./maintain.sh rotate-passwords --lab
+./maintain.sh rotate-passwords --generate
+./maintain.sh rotate-passwords --generate --only-dashboard
+./maintain.sh rotate-passwords --generate --only-ingress
 ```
 
-or:
+Environment-driven rotation:
 
 ```bash
-HERMES_PASSWORD_POLICY=lab BASIC_AUTH_PASSWORD='labpass' DASHBOARD_AUTH_PASSWORD='labpass' ./maintain.sh rotate-passwords
+BASIC_AUTH_USER=admin BASIC_AUTH_PASSWORD='use-a-long-random-value' DASHBOARD_AUTH_USER=admin DASHBOARD_AUTH_PASSWORD='use-another-long-random-value' ./maintain.sh rotate-passwords --from-env
 ```
 
-Useful partial rotations:
+Rotate only one layer:
 
 ```bash
-./maintain.sh rotate-passwords --skip-ingress      # dashboard only
-./maintain.sh rotate-passwords --skip-dashboard    # Traefik BasicAuth only
+./maintain.sh rotate-passwords --skip-ingress --prompt      # dashboard + WebUI only
+./maintain.sh rotate-passwords --skip-dashboard --prompt    # Traefik BasicAuth only
 ```
 
 Production policy rejects weak passwords by default. Use `--lab`, `HERMES_PASSWORD_POLICY=lab`, or `HERMES_ALLOW_WEAK_PASSWORD=true` only for lab systems.

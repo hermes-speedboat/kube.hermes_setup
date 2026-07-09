@@ -20,7 +20,7 @@ Usage:
   ./maintain.sh upgrade
   ./maintain.sh backup <backup.tgz>
   ./maintain.sh restore <backup.tgz>
-  ./maintain.sh rotate-passwords [--lab] [--generate] [--skip-ingress] [--skip-dashboard]
+  ./maintain.sh rotate-passwords [--lab] [--prompt|--generate|--from-env] [--skip-ingress] [--skip-dashboard]
   ./maintain.sh rotate-browser-token
 
 Environment:
@@ -137,22 +137,28 @@ is_truthy() {
 }
 
 prompt_secret() {
-  local var_name="$1" label="$2" value=""
-  value="$(printenv "$var_name" 2>/dev/null || true)"
-  if [[ -n "$value" ]]; then
-    printf '%s' "$value"
-    return 0
-  fi
-  [[ -t 0 ]] || fail "$var_name is required in non-interactive mode. Export it or run from a TTY."
+  local label="$1"
+  [[ -t 0 ]] || fail "$label requires an interactive TTY. Use --from-env with exported variables or --generate for non-interactive rotation."
   local first second
   while true; do
-    read -r -s -p "$label: " first; printf '\n' >&2
-    read -r -s -p "Confirm $label: " second; printf '\n' >&2
-    [[ "$first" == "$second" ]] || { printf 'Passwords did not match. Try again.\n' >&2; continue; }
-    [[ -n "$first" ]] || { printf 'Password must not be empty.\n' >&2; continue; }
+    read -r -s -p "$label: " first; printf '
+' >&2
+    read -r -s -p "Confirm $label: " second; printf '
+' >&2
+    [[ "$first" == "$second" ]] || { printf 'Passwords did not match. Try again.
+' >&2; continue; }
+    [[ -n "$first" ]] || { printf 'Password must not be empty.
+' >&2; continue; }
     printf '%s' "$first"
     return 0
   done
+}
+
+secret_from_env() {
+  local var_name="$1" value=""
+  value="$(printenv "$var_name" 2>/dev/null || true)"
+  [[ -n "$value" ]] || fail "$var_name is required with --from-env. Export it before running maintain.sh."
+  printf '%s' "$value"
 }
 
 password_is_strong() {
@@ -224,25 +230,37 @@ apply_dashboard_auth_secret() {
 }
 
 rotate_passwords() {
-  local rotate_ingress=1 rotate_dashboard=1 generated=0
+  local rotate_ingress=1 rotate_dashboard=1 input_mode="auto"
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --lab) export HERMES_PASSWORD_POLICY=lab ;;
-      --generate) generated=1 ;;
+      --generate) input_mode="generate" ;;
+      --prompt) input_mode="prompt" ;;
+      --from-env|--env) input_mode="env" ;;
       --skip-ingress) rotate_ingress=0 ;;
       --skip-dashboard) rotate_dashboard=0 ;;
+      --only-ingress) rotate_ingress=1; rotate_dashboard=0 ;;
+      --only-dashboard|--only-webui) rotate_ingress=0; rotate_dashboard=1 ;;
       --help|-h)
         cat <<'EOF'
 Usage:
-  ./maintain.sh rotate-passwords [--lab] [--generate] [--skip-ingress] [--skip-dashboard]
+  ./maintain.sh rotate-passwords [--lab] [--prompt|--generate|--from-env] [--skip-ingress] [--skip-dashboard]
+  ./maintain.sh rotate-passwords --only-ingress [--prompt|--generate|--from-env]
+  ./maintain.sh rotate-passwords --only-dashboard [--prompt|--generate|--from-env]
 
-Password sources, in order:
-  1. Environment variables: BASIC_AUTH_PASSWORD / DASHBOARD_AUTH_PASSWORD
-  2. Interactive hidden prompt, if stdin is a TTY
-  3. --generate for random values
+Passwords controlled:
+  Ingress BasicAuth: BASIC_AUTH_USER / BASIC_AUTH_PASSWORD
+  Dashboard + WebUI: DASHBOARD_AUTH_USER / DASHBOARD_AUTH_PASSWORD
 
-Production policy rejects weak passwords by default. For labs, use --lab or:
-  HERMES_PASSWORD_POLICY=lab ./maintain.sh rotate-passwords
+Input modes:
+  --prompt    Always ask with hidden interactive prompts. This is the default when stdin is a TTY.
+  --generate  Generate new random passwords for all selected targets and write them to .rendered/rotated-credentials-*.txt.
+  --from-env  Read selected passwords from environment variables. Use this for CI/non-interactive automation.
+
+Important:
+  Values present in hermes.env are NOT silently reused in interactive mode. This prevents a "rotation" that applies the old password again.
+  Production policy rejects weak passwords by default. For labs, use --lab or:
+    HERMES_PASSWORD_POLICY=lab ./maintain.sh rotate-passwords
 EOF
         return 0 ;;
       *) fail "unknown rotate-passwords option: $1" ;;
@@ -250,38 +268,67 @@ EOF
     shift
   done
 
+  if [[ "$rotate_ingress" -eq 0 && "$rotate_dashboard" -eq 0 ]]; then
+    fail "nothing selected to rotate"
+  fi
+
+  if [[ "$input_mode" == "auto" ]]; then
+    if [[ -t 0 ]]; then
+      input_mode="prompt"
+    else
+      input_mode="env"
+    fi
+  fi
+
   local basic_user="${BASIC_AUTH_USER:-admin}"
   local dashboard_user="${DASHBOARD_AUTH_USER:-admin}"
   local basic_pass="" dashboard_pass="" generated_file=""
-  if [[ "$generated" -eq 1 ]]; then
+  if [[ "$input_mode" == "generate" ]]; then
     generated_file="$(credential_output_file)"
     umask 077
     : > "$generated_file"
   fi
 
+  case "$input_mode" in
+    prompt|generate|env) ;;
+    *) fail "unsupported password input mode: $input_mode" ;;
+  esac
+
   if [[ "$rotate_ingress" -eq 1 ]]; then
-    if [[ "$generated" -eq 1 && -z "${BASIC_AUTH_PASSWORD:-}" ]]; then
-      basic_pass="$(rand_hex 18)"
-      printf 'BASIC_AUTH_USER=%s
+    case "$input_mode" in
+      generate)
+        basic_pass="$(rand_hex 18)"
+        printf 'BASIC_AUTH_USER=%s
 BASIC_AUTH_PASSWORD=%s
 ' "$basic_user" "$basic_pass" >> "$generated_file"
-    else
-      basic_pass="$(prompt_secret BASIC_AUTH_PASSWORD 'Ingress BasicAuth password')"
-    fi
+        ;;
+      env)
+        basic_pass="$(secret_from_env BASIC_AUTH_PASSWORD)"
+        ;;
+      prompt)
+        basic_pass="$(prompt_secret 'Ingress BasicAuth password')"
+        ;;
+    esac
     confirm_weak_password_if_interactive "Ingress BasicAuth password" "$basic_pass"
     apply_basic_auth_secret "$basic_user" "$basic_pass"
   fi
 
   if [[ "$rotate_dashboard" -eq 1 ]]; then
-    if [[ "$generated" -eq 1 && -z "${DASHBOARD_AUTH_PASSWORD:-}" ]]; then
-      dashboard_pass="$(rand_hex 18)"
-      printf 'DASHBOARD_AUTH_USER=%s
+    case "$input_mode" in
+      generate)
+        dashboard_pass="$(rand_hex 18)"
+        printf 'DASHBOARD_AUTH_USER=%s
 DASHBOARD_AUTH_PASSWORD=%s
 ' "$dashboard_user" "$dashboard_pass" >> "$generated_file"
-    else
-      dashboard_pass="$(prompt_secret DASHBOARD_AUTH_PASSWORD 'Dashboard internal password')"
-    fi
-    confirm_weak_password_if_interactive "Dashboard internal password" "$dashboard_pass"
+        ;;
+      env)
+        dashboard_pass="$(secret_from_env DASHBOARD_AUTH_PASSWORD)"
+        ;;
+      prompt)
+        dashboard_pass="$(prompt_secret 'Dashboard/WebUI password')"
+        ;;
+    esac
+    confirm_weak_password_if_interactive "Dashboard/WebUI password" "$dashboard_pass"
     apply_dashboard_auth_secret "$dashboard_user" "$dashboard_pass"
     kubectl -n "$HERMES_NAMESPACE" rollout restart deploy/hermes-dashboard deploy/hermes-webui
     kubectl -n "$HERMES_NAMESPACE" rollout status deploy/hermes-dashboard --timeout=300s
@@ -290,13 +337,14 @@ DASHBOARD_AUTH_PASSWORD=%s
 
   cat <<EOF
 Rotated requested password secrets.
+Input mode:          $input_mode
 Ingress BasicAuth:   $([[ "$rotate_ingress" -eq 1 ]] && echo "updated for user '$basic_user'" || echo "skipped")
-Dashboard/WebUI:    $([[ "$rotate_dashboard" -eq 1 ]] && echo "updated for dashboard user '$dashboard_user'; WebUI password uses the same secret" || echo "skipped")
+Dashboard/WebUI:     $([[ "$rotate_dashboard" -eq 1 ]] && echo "updated for dashboard user '$dashboard_user'; WebUI password uses the same secret" || echo "skipped")
 
 Plaintext passwords were not printed. Store env-provided/generated values in your password manager.
 For lab passwords use --lab or HERMES_PASSWORD_POLICY=lab explicitly.
 EOF
-  if [[ "$generated" -eq 1 ]]; then
+  if [[ "$input_mode" == "generate" ]]; then
     chmod 600 "$generated_file"
     warn "--generate was used. Generated plaintext values were written to $generated_file (gitignored, mode 600). Move them to your password manager and delete the file."
   fi

@@ -45,10 +45,42 @@ check_internal_health() {
 }
 
 check_browser_cdp() {
-  local pod
+  local pod timeout_seconds browser_pod cdp token pressure pressure_state running max_concurrent queued is_available
+  timeout_seconds="${DOCTOR_CDP_TIMEOUT_SECONDS:-15}"
+
+  browser_pod="$(kubectl -n "$HERMES_NAMESPACE" get pods -l app=hermes-browser --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+  cdp="$(kubectl -n "$HERMES_NAMESPACE" get secret hermes-browser-cdp -o jsonpath='{.data.BROWSER_CDP_URL}' 2>/dev/null | base64 -d 2>/dev/null || true)"
+  token="${cdp##*token=}"
+  if [[ -n "$browser_pod" && -n "$token" && "$token" != "$cdp" ]]; then
+    pressure="$(timeout 8s kubectl -n "$HERMES_NAMESPACE" exec "$browser_pod" -- sh -lc 'TOKEN="$0"; wget -qO- "http://127.0.0.1:3000/pressure?token=$TOKEN"' "$token" 2>/dev/null || true)"
+    if [[ -n "$pressure" ]]; then
+      pressure_state="$(PRESSURE_JSON="$pressure" python3 - <<'PY'
+import json, os
+try:
+    p=json.loads(os.environ.get('PRESSURE_JSON','{}')).get('pressure', {})
+    print(p.get('running', ''), p.get('maxConcurrent', ''), p.get('queued', ''), str(p.get('isAvailable', '')).lower())
+except Exception:
+    print('', '', '', '')
+PY
+)"
+      read -r running max_concurrent queued is_available <<<"$pressure_state"
+      if [[ "$is_available" == "true" ]]; then
+        ok "browserless pressure available running=${running:-?} max=${max_concurrent:-?} queued=${queued:-?}"
+      fi
+      if [[ "${queued:-0}" =~ ^[0-9]+$ && "${queued:-0}" -gt 0 ]]; then
+        warn "browserless has queued CDP sessions; skipping active navigation test to avoid doctor hanging"
+        return 0
+      fi
+      if [[ "${running:-}" =~ ^[0-9]+$ && "${max_concurrent:-}" =~ ^[0-9]+$ && "$max_concurrent" -gt 0 && "$running" -ge "$max_concurrent" ]]; then
+        warn "browserless is at concurrency limit (${running}/${max_concurrent}); skipping active navigation test"
+        return 0
+      fi
+    fi
+  fi
+
   pod="$(kubectl -n "$HERMES_NAMESPACE" get pods -l app=hermes-agent --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
   [[ -n "$pod" ]] || { fail "no running hermes-agent pod"; return; }
-  if kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -lc '/opt/hermes/.venv/bin/python - <<PY
+  if timeout "${timeout_seconds}s" kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -lc '/opt/hermes/.venv/bin/python - <<PY
 from tools.browser_tool import _get_cdp_override, browser_navigate
 url=_get_cdp_override()
 assert url and "/chromium" in url
@@ -58,7 +90,7 @@ print("ok")
 PY' >/dev/null 2>&1; then
     ok "browser CDP from hermes-agent"
   else
-    fail "browser CDP from hermes-agent failed"
+    fail "browser CDP from hermes-agent failed or timed out after ${timeout_seconds}s"
   fi
 }
 
@@ -100,6 +132,7 @@ check_codex_auth() {
 main() {
   check_cmd kubectl
   check_cmd curl
+  check_cmd timeout
   check_k8s
   check_rollouts
   check_internal_health
