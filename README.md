@@ -2,10 +2,10 @@
 
 Production-oriented Kubernetes/K3s installer for a multi-container Hermes Agent stack:
 
-- **Hermes Agent Gateway** (`nousresearch/hermes-agent`) — API/gateway runtime
-- **Hermes Dashboard** (`nousresearch/hermes-agent`) — administrative dashboard
-- **Hermes WebUI** (`ghcr.io/nesquena/hermes-webui`) — browser chat interface
-- **Browserless Chromium** (`ghcr.io/browserless/chromium`) — internal real browser/CDP backend for Hermes browser tools
+- **[Hermes Agent Gateway](https://github.com/nousresearch/hermes-agent)** (`nousresearch/hermes-agent`) — API/gateway runtime
+- **[Hermes Dashboard](https://github.com/nousresearch/hermes-agent)** (`nousresearch/hermes-agent`) — administrative dashboard
+- **[Hermes WebUI](https://github.com/nesquena/hermes-webui)** (`ghcr.io/nesquena/hermes-webui`) — browser chat interface
+- **[Browserless Chromium](https://github.com/browserless/browserless/pkgs/container/chromium)** (`ghcr.io/browserless/chromium`) — internal real browser/CDP backend for Hermes browser tools
 
 The repository is intentionally template-driven and contains **no real hostnames, passwords, tokens, OAuth state, kubeconfig, or cluster-specific secrets**.
 
