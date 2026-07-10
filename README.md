@@ -108,6 +108,8 @@ Important variables:
 | `HERMES_BROWSER_IMAGE` | Browserless image |
 | `HERMES_RUNTIME_UID`, `HERMES_RUNTIME_GID` | Shared PVC owner for Agent/Dashboard/WebUI, default `10000` |
 | `HERMES_WEBUI_MAX_UPLOAD_MB` | WebUI upload cap in MiB, default `220` |
+| `HERMES_DASHBOARD_FILES_ROOT` | Dashboard `/files` root, set by manifest to `/workspace` |
+| `HERMES_WRITE_SAFE_ROOT` | Safe write roots, set by manifest to `/opt/data:/workspace` |
 
 Secrets may be generated automatically by `install.sh` when variables are omitted. The generated/used initial values are written to `.rendered/generated-credentials.txt` with mode `0600`; this path is gitignored, but you should still move the values to a password manager and delete the file after installation.
 
@@ -275,3 +277,7 @@ Upstream Hermes WebUI defaults file uploads to 20MiB via `MAX_UPLOAD_BYTES`. Thi
 ## Kubernetes resource knobs
 
 The manifest resource requests/limits are configurable through `HERMES_*_CPU_REQUEST`, `HERMES_*_MEMORY_REQUEST`, `HERMES_*_CPU_LIMIT`, and `HERMES_*_MEMORY_LIMIT` variables for Agent, Dashboard, WebUI, and Browser. Defaults stay conservative, but cramped lab clusters can lower requests in their env file.
+
+### Dashboard workspace file browser
+
+The Dashboard `/files` view needs `HERMES_DASHBOARD_FILES_ROOT=/workspace`. This installer also sets `HERMES_WRITE_SAFE_ROOT=/opt/data:/workspace` in Agent, Dashboard, and WebUI so file tools can safely use both PVCs.

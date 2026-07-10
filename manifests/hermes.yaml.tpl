@@ -143,6 +143,8 @@ spec:
         env:
         - name: HERMES_HOME
           value: /opt/data
+        - name: HERMES_WRITE_SAFE_ROOT
+          value: /opt/data:/workspace
         - name: API_SERVER_ENABLED
           value: "true"
         - name: API_SERVER_HOST
@@ -241,6 +243,10 @@ spec:
         env:
         - name: HERMES_HOME
           value: /opt/data
+        - name: HERMES_WRITE_SAFE_ROOT
+          value: /opt/data:/workspace
+        - name: HERMES_DASHBOARD_FILES_ROOT
+          value: /workspace
         - name: HERMES_DASHBOARD_BASIC_AUTH_USERNAME
           valueFrom:
             secretKeyRef:
@@ -370,6 +376,8 @@ spec:
         env:
         - name: HERMES_HOME
           value: /opt/data
+        - name: HERMES_WRITE_SAFE_ROOT
+          value: /opt/data:/workspace
         - name: HERMES_WEBUI_HOST
           value: 0.0.0.0
         - name: HERMES_WEBUI_PORT

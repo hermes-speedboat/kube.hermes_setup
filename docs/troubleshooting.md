@@ -218,3 +218,24 @@ API_SERVER_KEY is a placeholder or too short (<16 chars)
 ```
 
 Cause: a weak `API_SERVER_KEY` was inherited from the environment or env file. Current `install.sh` generates a strong replacement when the value is shorter than 16 characters. Rerun `./install.sh` and wait for `deploy/hermes-agent` to roll out.
+
+### Dashboard `/files` returns `403: Path outside managed files root`
+
+Root cause: the upstream Hermes image defaults `HERMES_DASHBOARD_FILES_ROOT` unset and then locks the Dashboard file browser to `/opt/data` when `HERMES_HOME=/opt/data`. In this Kubernetes setup the user workspace is mounted separately at `/workspace`, so the Dashboard file browser rejects `/workspace` unless the Dashboard files root is configured.
+
+Expected env:
+
+```bash
+# Dashboard container; controls `/files` locked root
+HERMES_DASHBOARD_FILES_ROOT=/workspace
+
+# Agent, Dashboard, and WebUI; controls safe write roots for file tools
+HERMES_WRITE_SAFE_ROOT=/opt/data:/workspace
+```
+
+Verify in the Dashboard pod:
+
+```bash
+kubectl -n "$HERMES_NAMESPACE" exec deploy/hermes-dashboard -- \
+  sh -lc 'echo dashboard_files_root=$HERMES_DASHBOARD_FILES_ROOT; echo write_safe_root=$HERMES_WRITE_SAFE_ROOT; ls -ld /opt/data /workspace'
+```

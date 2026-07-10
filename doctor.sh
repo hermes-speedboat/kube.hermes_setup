@@ -110,6 +110,20 @@ check_webui_agent_source() {
 }
 
 
+
+check_dashboard_workspace_root() {
+  local pod root roots
+  pod=$(kubectl -n "$HERMES_NAMESPACE" get pod -l app=hermes-dashboard --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+  [[ -n "$pod" ]] || { warn "no running dashboard pod for workspace-root check"; return; }
+  root=$(kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -lc 'printf %s "${HERMES_DASHBOARD_FILES_ROOT:-}"' 2>/dev/null || true)
+  roots=$(kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -lc 'printf %s "${HERMES_WRITE_SAFE_ROOT:-}"' 2>/dev/null || true)
+  if [[ "$root" == "/workspace" && "$roots" == *"/workspace"* ]]; then
+    ok "dashboard files root is /workspace and write-safe roots include /workspace"
+  else
+    fail "dashboard workspace roots invalid (HERMES_DASHBOARD_FILES_ROOT=${root:-unset}, HERMES_WRITE_SAFE_ROOT=${roots:-unset})"
+  fi
+}
+
 check_webui_upload_limit() {
   local pod expected actual
   expected="${HERMES_WEBUI_MAX_UPLOAD_MB:-220}"
@@ -158,6 +172,7 @@ main() {
   check_rollouts
   check_internal_health
   check_webui_agent_source
+  check_dashboard_workspace_root
   check_webui_upload_limit
   check_browser_cdp
   check_external

@@ -430,3 +430,7 @@ The manifest resource requests/limits are configurable through `HERMES_*_CPU_REQ
 ## Deployment update strategy
 
 Deployment update strategy is `Recreate` for the four single-replica components. This avoids surge Pods during `install.sh`/secret refresh restarts, which can otherwise deadlock rollouts on small single-node K3s clusters with tight CPU requests.
+
+### Dashboard `/files` workspace root
+
+The Dashboard file browser is controlled by `HERMES_DASHBOARD_FILES_ROOT`, while file tools use `HERMES_WRITE_SAFE_ROOT`. Upstream hosted/container mode locks Dashboard `/files` to `/opt/data`; this repo mounts the actual workspace at `/workspace`. Set `HERMES_DASHBOARD_FILES_ROOT=/workspace` on Dashboard and `HERMES_WRITE_SAFE_ROOT=/opt/data:/workspace` on Agent, Dashboard, and WebUI. If `/files` shows `403: Path outside managed files root`, check these env vars first.
