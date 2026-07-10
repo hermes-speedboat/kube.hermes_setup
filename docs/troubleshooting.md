@@ -186,3 +186,56 @@ If you want new random values, use:
 ```
 
 This separation prevents a fake rotation where `maintain.sh` silently reapplies the old password from `hermes.env`.
+
+
+## WebUI upload fails around 20MB
+
+Upstream Hermes WebUI defaults `MAX_UPLOAD_BYTES` to 20MiB and exposes the override as:
+
+```bash
+HERMES_WEBUI_MAX_UPLOAD_MB=220
+```
+
+This installer injects that variable into the WebUI deployment. Verify the effective value:
+
+```bash
+kubectl -n "$HERMES_NAMESPACE" exec deploy/hermes-webui -- sh -lc '
+  /app/venv/bin/python - <<"PY"
+from api.config import MAX_UPLOAD_BYTES
+print(MAX_UPLOAD_BYTES)
+PY'
+```
+
+Expected for the default: `230686720` bytes.
+
+
+## Agent refuses API server key
+
+Symptom in `hermes-agent` logs:
+
+```text
+API_SERVER_KEY is a placeholder or too short (<16 chars)
+```
+
+Cause: a weak `API_SERVER_KEY` was inherited from the environment or env file. Current `install.sh` generates a strong replacement when the value is shorter than 16 characters. Rerun `./install.sh` and wait for `deploy/hermes-agent` to roll out.
+
+### Dashboard `/files` returns `403: Path outside managed files root`
+
+Root cause: the upstream Hermes image defaults `HERMES_DASHBOARD_FILES_ROOT` unset and then locks the Dashboard file browser to `/opt/data` when `HERMES_HOME=/opt/data`. In this Kubernetes setup the user workspace is mounted separately at `/workspace`, so the Dashboard file browser rejects `/workspace` unless the Dashboard files root is configured.
+
+Expected env:
+
+```bash
+# Dashboard container; controls `/files` locked root
+HERMES_DASHBOARD_FILES_ROOT=/workspace
+
+# Agent, Dashboard, and WebUI; controls safe write roots for file tools
+HERMES_WRITE_SAFE_ROOT=/opt/data:/workspace
+```
+
+Verify in the Dashboard pod:
+
+```bash
+kubectl -n "$HERMES_NAMESPACE" exec deploy/hermes-dashboard -- \
+  sh -lc 'echo dashboard_files_root=$HERMES_DASHBOARD_FILES_ROOT; echo write_safe_root=$HERMES_WRITE_SAFE_ROOT; ls -ld /opt/data /workspace'
+```

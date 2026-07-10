@@ -103,6 +103,8 @@ metadata:
 spec:
   replicas: 1
   revisionHistoryLimit: 3
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: hermes-agent
@@ -141,6 +143,8 @@ spec:
         env:
         - name: HERMES_HOME
           value: /opt/data
+        - name: HERMES_WRITE_SAFE_ROOT
+          value: /opt/data:/workspace
         - name: API_SERVER_ENABLED
           value: "true"
         - name: API_SERVER_HOST
@@ -178,11 +182,11 @@ spec:
           failureThreshold: 6
         resources:
           requests:
-            cpu: 500m
-            memory: 1Gi
+            cpu: ${HERMES_AGENT_CPU_REQUEST}
+            memory: ${HERMES_AGENT_MEMORY_REQUEST}
           limits:
-            cpu: "2"
-            memory: 4Gi
+            cpu: "${HERMES_AGENT_CPU_LIMIT}"
+            memory: ${HERMES_AGENT_MEMORY_LIMIT}
       volumes:
       - name: home
         persistentVolumeClaim:
@@ -199,6 +203,8 @@ metadata:
 spec:
   replicas: 1
   revisionHistoryLimit: 3
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: hermes-dashboard
@@ -237,6 +243,10 @@ spec:
         env:
         - name: HERMES_HOME
           value: /opt/data
+        - name: HERMES_WRITE_SAFE_ROOT
+          value: /opt/data:/workspace
+        - name: HERMES_DASHBOARD_FILES_ROOT
+          value: /workspace
         - name: HERMES_DASHBOARD_BASIC_AUTH_USERNAME
           valueFrom:
             secretKeyRef:
@@ -278,11 +288,11 @@ spec:
           failureThreshold: 6
         resources:
           requests:
-            cpu: 150m
-            memory: 256Mi
+            cpu: ${HERMES_DASHBOARD_CPU_REQUEST}
+            memory: ${HERMES_DASHBOARD_MEMORY_REQUEST}
           limits:
-            cpu: "1"
-            memory: 1Gi
+            cpu: "${HERMES_DASHBOARD_CPU_LIMIT}"
+            memory: ${HERMES_DASHBOARD_MEMORY_LIMIT}
       volumes:
       - name: home
         persistentVolumeClaim:
@@ -299,6 +309,8 @@ metadata:
 spec:
   replicas: 1
   revisionHistoryLimit: 3
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: hermes-webui
@@ -364,6 +376,8 @@ spec:
         env:
         - name: HERMES_HOME
           value: /opt/data
+        - name: HERMES_WRITE_SAFE_ROOT
+          value: /opt/data:/workspace
         - name: HERMES_WEBUI_HOST
           value: 0.0.0.0
         - name: HERMES_WEBUI_PORT
@@ -379,6 +393,8 @@ spec:
             secretKeyRef:
               name: hermes-dashboard-auth
               key: password
+        - name: HERMES_WEBUI_MAX_UPLOAD_MB
+          value: "${HERMES_WEBUI_MAX_UPLOAD_MB}"
         - name: PATH
           value: /opt/data/node/bin:/opt/data/node_modules/.bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         - name: HERMES_API_URL
@@ -421,11 +437,11 @@ spec:
           failureThreshold: 6
         resources:
           requests:
-            cpu: 250m
-            memory: 512Mi
+            cpu: ${HERMES_WEBUI_CPU_REQUEST}
+            memory: ${HERMES_WEBUI_MEMORY_REQUEST}
           limits:
-            cpu: "1"
-            memory: 2Gi
+            cpu: "${HERMES_WEBUI_CPU_LIMIT}"
+            memory: ${HERMES_WEBUI_MEMORY_LIMIT}
       volumes:
       - name: home
         persistentVolumeClaim:
@@ -444,6 +460,8 @@ metadata:
 spec:
   replicas: 1
   revisionHistoryLimit: 3
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: hermes-browser
@@ -489,11 +507,11 @@ spec:
           failureThreshold: 6
         resources:
           requests:
-            cpu: 500m
-            memory: 768Mi
+            cpu: ${HERMES_BROWSER_CPU_REQUEST}
+            memory: ${HERMES_BROWSER_MEMORY_REQUEST}
           limits:
-            cpu: "2"
-            memory: 2Gi
+            cpu: "${HERMES_BROWSER_CPU_LIMIT}"
+            memory: ${HERMES_BROWSER_MEMORY_LIMIT}
 ---
 apiVersion: v1
 kind: Service
