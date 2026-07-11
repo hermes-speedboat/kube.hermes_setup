@@ -254,3 +254,41 @@ If an interactive `kubectl exec` shell resets `PATH`, export the addon path manu
 ```bash
 export PATH=/opt/data/addon-venv/bin:$PATH
 ```
+
+## Persistent HOME and SSH
+
+The Agent deployment supports a persistent Unix home and SSH directory on the `hermes-home` PVC:
+
+```bash
+HERMES_HOME_AS_HOME=true
+HERMES_SSH_SETUP=true
+HERMES_SSH_GENERATE_KEY=false
+HERMES_SSH_KEY_TYPE=ed25519
+HERMES_SSH_KEY_PATH=/opt/data/.ssh/id_ed25519
+```
+
+Operational behavior:
+
+- `HOME=/opt/data`, `XDG_CONFIG_HOME=/opt/data/.config`, and `XDG_CACHE_HOME=/opt/data/.cache` are set on the Agent process.
+- `/opt/data/.ssh` is created with mode `700`; `known_hosts` is created with mode `644`.
+- If `HERMES_SSH_GENERATE_KEY=true`, the init job generates the key only when `HERMES_SSH_KEY_PATH` does not already exist. Existing keys are preserved.
+- Private keys are forced to mode `600`; public keys are forced to mode `644`.
+
+Fetch the generated public key:
+
+```bash
+kubectl -n <namespace> exec deploy/hermes-agent -- cat /opt/data/.ssh/id_ed25519.pub
+```
+
+Manual setup is possible and persistent:
+
+```bash
+kubectl -n <namespace> exec -it deploy/hermes-agent -- /bin/bash
+mkdir -p /opt/data/.ssh
+ssh-keygen -t ed25519 -N '' -f /opt/data/.ssh/id_ed25519
+chmod 700 /opt/data/.ssh
+chmod 600 /opt/data/.ssh/id_ed25519
+chmod 644 /opt/data/.ssh/id_ed25519.pub
+```
+
+Keep host key checking enabled. Prefer maintaining `/opt/data/.ssh/known_hosts` or using reviewed per-host `accept-new` entries in `/opt/data/.ssh/config`; do not use global `StrictHostKeyChecking=no` as a default.

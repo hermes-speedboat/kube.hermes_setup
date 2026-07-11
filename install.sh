@@ -66,6 +66,11 @@ prepare_defaults() {
   export HERMES_BOOTSTRAP_INCLUDE_AUTH="${HERMES_BOOTSTRAP_INCLUDE_AUTH:-false}"
   export HERMES_ADDON_REQUIREMENTS="${HERMES_ADDON_REQUIREMENTS:-}"
   export HERMES_ADDON_VENV="${HERMES_ADDON_VENV:-/opt/data/addon-venv}"
+  export HERMES_HOME_AS_HOME="${HERMES_HOME_AS_HOME:-true}"
+  export HERMES_SSH_SETUP="${HERMES_SSH_SETUP:-true}"
+  export HERMES_SSH_GENERATE_KEY="${HERMES_SSH_GENERATE_KEY:-false}"
+  export HERMES_SSH_KEY_TYPE="${HERMES_SSH_KEY_TYPE:-ed25519}"
+  export HERMES_SSH_KEY_PATH="${HERMES_SSH_KEY_PATH:-/opt/data/.ssh/id_ed25519}"
   export HERMES_AGENT_CPU_REQUEST="${HERMES_AGENT_CPU_REQUEST:-100m}"
   export HERMES_AGENT_MEMORY_REQUEST="${HERMES_AGENT_MEMORY_REQUEST:-256Mi}"
   export HERMES_AGENT_CPU_LIMIT="${HERMES_AGENT_CPU_LIMIT:-1}"
@@ -117,6 +122,20 @@ prepare_defaults() {
     [[ -f "$HERMES_ADDON_REQUIREMENTS" ]] || fail "HERMES_ADDON_REQUIREMENTS does not exist or is not a file: $HERMES_ADDON_REQUIREMENTS"
   fi
   [[ "$HERMES_ADDON_VENV" = /opt/data/* ]] || fail "HERMES_ADDON_VENV must be under /opt/data for PVC persistence"
+  case "$HERMES_HOME_AS_HOME" in true|false|TRUE|FALSE|1|0|yes|no|YES|NO|on|off|ON|OFF) ;; *) fail "HERMES_HOME_AS_HOME must be boolean" ;; esac
+  case "$HERMES_SSH_SETUP" in true|false|TRUE|FALSE|1|0|yes|no|YES|NO|on|off|ON|OFF) ;; *) fail "HERMES_SSH_SETUP must be boolean" ;; esac
+  case "$HERMES_SSH_GENERATE_KEY" in true|false|TRUE|FALSE|1|0|yes|no|YES|NO|on|off|ON|OFF) ;; *) fail "HERMES_SSH_GENERATE_KEY must be boolean" ;; esac
+  case "$HERMES_SSH_KEY_TYPE" in ed25519|rsa|ecdsa) ;; *) fail "HERMES_SSH_KEY_TYPE must be one of: ed25519, rsa, ecdsa" ;; esac
+  [[ "$HERMES_SSH_KEY_PATH" = /opt/data/.ssh/* ]] || fail "HERMES_SSH_KEY_PATH must be under /opt/data/.ssh for PVC persistence"
+  if [[ "$HERMES_HOME_AS_HOME" =~ ^(1|true|TRUE|yes|YES|on|ON)$ ]]; then
+    export HERMES_CONTAINER_HOME="/opt/data"
+    export HERMES_XDG_CONFIG_HOME="/opt/data/.config"
+    export HERMES_XDG_CACHE_HOME="/opt/data/.cache"
+  else
+    export HERMES_CONTAINER_HOME="/root"
+    export HERMES_XDG_CONFIG_HOME="/root/.config"
+    export HERMES_XDG_CACHE_HOME="/root/.cache"
+  fi
   [[ "$HERMES_RUNTIME_UID" =~ ^[0-9]+$ ]] || fail "HERMES_RUNTIME_UID must be numeric"
   [[ "$HERMES_RUNTIME_GID" =~ ^[0-9]+$ ]] || fail "HERMES_RUNTIME_GID must be numeric"
   [[ "$HERMES_WEBUI_MAX_UPLOAD_MB" =~ ^[0-9]+$ ]] || fail "HERMES_WEBUI_MAX_UPLOAD_MB must be numeric"

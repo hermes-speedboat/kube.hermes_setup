@@ -58,11 +58,33 @@ spec:
           value: "${HERMES_BOOTSTRAP_MODE}"
         - name: HERMES_ADDON_VENV
           value: "${HERMES_ADDON_VENV}"
+        - name: HERMES_SSH_SETUP
+          value: "${HERMES_SSH_SETUP}"
+        - name: HERMES_SSH_GENERATE_KEY
+          value: "${HERMES_SSH_GENERATE_KEY}"
+        - name: HERMES_SSH_KEY_TYPE
+          value: "${HERMES_SSH_KEY_TYPE}"
+        - name: HERMES_SSH_KEY_PATH
+          value: "${HERMES_SSH_KEY_PATH}"
         command: ["sh", "-c"]
         args:
         - |
           set -eu
-          mkdir -p /opt/data /workspace
+          mkdir -p /opt/data /workspace /opt/data/.config /opt/data/.cache
+          if [ "${HERMES_SSH_SETUP}" != "false" ] && [ "${HERMES_SSH_SETUP}" != "FALSE" ] && [ "${HERMES_SSH_SETUP}" != "0" ] && [ "${HERMES_SSH_SETUP}" != "no" ] && [ "${HERMES_SSH_SETUP}" != "NO" ] && [ "${HERMES_SSH_SETUP}" != "off" ] && [ "${HERMES_SSH_SETUP}" != "OFF" ]; then
+            mkdir -p /opt/data/.ssh
+            touch /opt/data/.ssh/known_hosts
+            chmod 700 /opt/data/.ssh
+            chmod 644 /opt/data/.ssh/known_hosts
+            if [ "${HERMES_SSH_GENERATE_KEY}" != "false" ] && [ "${HERMES_SSH_GENERATE_KEY}" != "FALSE" ] && [ "${HERMES_SSH_GENERATE_KEY}" != "0" ] && [ "${HERMES_SSH_GENERATE_KEY}" != "no" ] && [ "${HERMES_SSH_GENERATE_KEY}" != "NO" ] && [ "${HERMES_SSH_GENERATE_KEY}" != "off" ] && [ "${HERMES_SSH_GENERATE_KEY}" != "OFF" ]; then
+              if [ ! -f "${HERMES_SSH_KEY_PATH}" ]; then
+                command -v ssh-keygen >/dev/null 2>&1 || { echo "ssh-keygen is required when HERMES_SSH_GENERATE_KEY=true" >&2; exit 1; }
+                ssh-keygen -t "${HERMES_SSH_KEY_TYPE}" -N '' -C "hermes-agent@${HERMES_NAMESPACE}" -f "${HERMES_SSH_KEY_PATH}"
+              fi
+              chmod 600 "${HERMES_SSH_KEY_PATH}"
+              [ ! -f "${HERMES_SSH_KEY_PATH}.pub" ] || chmod 644 "${HERMES_SSH_KEY_PATH}.pub"
+            fi
+          fi
           bootstrap_copy_missing() {
             src="$1"
             dest="$2"
@@ -141,6 +163,10 @@ spec:
           fi
           chown -R ${HERMES_RUNTIME_UID}:${HERMES_RUNTIME_GID} /opt/data /workspace
           chmod 700 /opt/data
+          [ ! -d /opt/data/.ssh ] || chmod 700 /opt/data/.ssh
+          [ ! -f /opt/data/.ssh/known_hosts ] || chmod 644 /opt/data/.ssh/known_hosts
+          find /opt/data/.ssh -type f -name 'id_*' ! -name '*.pub' -exec chmod 600 {} + 2>/dev/null || true
+          find /opt/data/.ssh -type f -name 'id_*.pub' -exec chmod 644 {} + 2>/dev/null || true
         volumeMounts:
         - name: home
           mountPath: /opt/data
@@ -192,6 +218,10 @@ spec:
           mkdir -p /opt/data /workspace
           chown -R ${HERMES_RUNTIME_UID}:${HERMES_RUNTIME_GID} /opt/data /workspace
           chmod 700 /opt/data
+          [ ! -d /opt/data/.ssh ] || chmod 700 /opt/data/.ssh
+          [ ! -f /opt/data/.ssh/known_hosts ] || chmod 644 /opt/data/.ssh/known_hosts
+          find /opt/data/.ssh -type f -name 'id_*' ! -name '*.pub' -exec chmod 600 {} + 2>/dev/null || true
+          find /opt/data/.ssh -type f -name 'id_*.pub' -exec chmod 644 {} + 2>/dev/null || true
         volumeMounts:
         - name: home
           mountPath: /opt/data
@@ -209,6 +239,12 @@ spec:
         env:
         - name: HERMES_HOME
           value: /opt/data
+        - name: HOME
+          value: "${HERMES_CONTAINER_HOME}"
+        - name: XDG_CONFIG_HOME
+          value: "${HERMES_XDG_CONFIG_HOME}"
+        - name: XDG_CACHE_HOME
+          value: "${HERMES_XDG_CACHE_HOME}"
         - name: HERMES_WRITE_SAFE_ROOT
           value: /opt/data:/workspace
         - name: HERMES_ADDON_VENV
@@ -296,6 +332,10 @@ spec:
           mkdir -p /opt/data /workspace
           chown -R ${HERMES_RUNTIME_UID}:${HERMES_RUNTIME_GID} /opt/data /workspace
           chmod 700 /opt/data
+          [ ! -d /opt/data/.ssh ] || chmod 700 /opt/data/.ssh
+          [ ! -f /opt/data/.ssh/known_hosts ] || chmod 644 /opt/data/.ssh/known_hosts
+          find /opt/data/.ssh -type f -name 'id_*' ! -name '*.pub' -exec chmod 600 {} + 2>/dev/null || true
+          find /opt/data/.ssh -type f -name 'id_*.pub' -exec chmod 644 {} + 2>/dev/null || true
         volumeMounts:
         - name: home
           mountPath: /opt/data
@@ -402,6 +442,10 @@ spec:
           mkdir -p /opt/data/webui /workspace
           chown -R ${HERMES_RUNTIME_UID}:${HERMES_RUNTIME_GID} /opt/data /workspace
           chmod 700 /opt/data
+          [ ! -d /opt/data/.ssh ] || chmod 700 /opt/data/.ssh
+          [ ! -f /opt/data/.ssh/known_hosts ] || chmod 644 /opt/data/.ssh/known_hosts
+          find /opt/data/.ssh -type f -name 'id_*' ! -name '*.pub' -exec chmod 600 {} + 2>/dev/null || true
+          find /opt/data/.ssh -type f -name 'id_*.pub' -exec chmod 644 {} + 2>/dev/null || true
           chmod 700 /opt/data/webui
         volumeMounts:
         - name: home

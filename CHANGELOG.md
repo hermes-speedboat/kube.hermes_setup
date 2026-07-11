@@ -8,6 +8,7 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
+- Adds persistent Agent HOME/XDG and SSH keypair setup with safe `/opt/data/.ssh` permissions and opt-in key generation.
 - Adds opt-in persistent Python addon venv support via `HERMES_ADDON_REQUIREMENTS` and `HERMES_ADDON_VENV`, including manual install documentation.
 - Replaces the placeholder bootstrap skill with a reusable `markdown-pdf` skill, including a pip-only renderer, editorial CSS theme, and container-focused verification notes.
 - Adds example addon requirements for the bundled `markdown-pdf` workflow and `pyvim`.
