@@ -161,6 +161,33 @@ spec:
               printf '%s\n' 'A real Chromium browser is available through Hermes browser tools via the `BROWSER_CDP_URL` environment variable. Use browser tools for real UI/web verification, especially WebUI issues, JavaScript-rendered pages, login flows, Ingress checks, screenshots, browser console errors, and reproducing frontend problems. Use curl for HTTP status/headers/health endpoints, but do not rely only on curl for UI problems. Never print the full `BROWSER_CDP_URL`; it contains a token.'
             } > /opt/data/SOUL.md
           fi
+          mkdir -p /workspace/ansible/collections /workspace/ansible/group_vars /workspace/ansible/host_vars /workspace/ansible/inventory /workspace/ansible/playbooks /workspace/ansible/roles /opt/data/ansible/cp /opt/data/ansible/tmp
+          if [ ! -f /workspace/ansible/ansible.cfg ]; then
+            {
+              printf '%s\n' '[defaults]'
+              printf '%s\n' 'inventory = /workspace/ansible/inventory/hosts.ini'
+              printf '%s\n' 'roles_path = /workspace/ansible/roles:/opt/data/ansible/roles'
+              printf '%s\n' 'collections_path = /workspace/ansible/collections:/opt/data/ansible/collections'
+              printf '%s\n' 'local_tmp = /opt/data/ansible/tmp'
+              printf '%s\n' 'remote_tmp = /tmp/.ansible-hermes'
+              printf '%s\n' 'host_key_checking = True'
+              printf '%s\n' 'retry_files_enabled = False'
+              printf '%s\n' 'stdout_callback = default'
+              printf '%s\n' 'interpreter_python = auto_silent'
+              printf '%s\n' ''
+              printf '%s\n' '[ssh_connection]'
+              printf '%s\n' 'ssh_args = -F /opt/data/.ssh/config -o ControlMaster=auto -o ControlPersist=60s'
+              printf '%s\n' 'control_path_dir = /opt/data/ansible/cp'
+              printf '%s\n' 'pipelining = True'
+            } > /workspace/ansible/ansible.cfg
+          fi
+          if [ ! -f /workspace/ansible/inventory/hosts.ini ]; then
+            {
+              printf '%s\n' '# Safe default inventory. Replace with your own hosts.'
+              printf '%s\n' '[local]'
+              printf '%s\n' 'localhost ansible_connection=local'
+            } > /workspace/ansible/inventory/hosts.ini
+          fi
           chown -R ${HERMES_RUNTIME_UID}:${HERMES_RUNTIME_GID} /opt/data /workspace
           chmod 700 /opt/data
           [ ! -d /opt/data/.ssh ] || chmod 700 /opt/data/.ssh
@@ -215,7 +242,7 @@ spec:
         args:
         - |
           set -eu
-          mkdir -p /opt/data /workspace
+          mkdir -p /opt/data /workspace/ansible/collections /workspace/ansible/group_vars /workspace/ansible/host_vars /workspace/ansible/inventory /workspace/ansible/playbooks /workspace/ansible/roles /opt/data/ansible/cp /opt/data/ansible/tmp
           chown -R ${HERMES_RUNTIME_UID}:${HERMES_RUNTIME_GID} /opt/data /workspace
           chmod 700 /opt/data
           [ ! -d /opt/data/.ssh ] || chmod 700 /opt/data/.ssh
@@ -249,6 +276,8 @@ spec:
           value: /opt/data:/workspace
         - name: HERMES_ADDON_VENV
           value: "${HERMES_ADDON_VENV}"
+        - name: ANSIBLE_CONFIG
+          value: /workspace/ansible/ansible.cfg
         - name: PATH
           value: /opt/hermes/bin:/opt/hermes/.venv/bin:${HERMES_ADDON_VENV}/bin:/opt/data/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         - name: API_SERVER_ENABLED
