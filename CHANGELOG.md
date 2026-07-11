@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [v1.2.0] - 2026-07-10
+
+### Changed
+
+- Tunes installer and example resource defaults for small K3s/lab deployments: 100m CPU requests, 1 CPU limits, 256Mi Agent/WebUI memory requests, 96Mi Dashboard memory request, 128Mi Browserless memory request, and 1Gi memory limits.
+
 ## [v1.1.0] - 2026-07-10
 
 ### Added
