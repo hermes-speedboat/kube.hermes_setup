@@ -365,6 +365,18 @@ Redact tokens before sharing output.
 - Preserve Dashboard/WebUI shared password behavior unless upstream WebUI adds a better first-class bootstrap API.
 
 
+
+## Persistent HOME and SSH
+
+The Agent deployment can set `HOME=/opt/data` and XDG dirs under `/opt/data` so CLI state and OpenSSH defaults persist on the `hermes-home` PVC. The init job prepares `/opt/data/.ssh` and generates an SSH keypair when `HERMES_SSH_SETUP=true` and the key is missing. Existing keys must be preserved; key generation is first-install/missing-only. Never commit private keys or real known_hosts/config data into public examples.
+
+Validation points:
+
+```bash
+kubectl -n <namespace> exec deploy/hermes-agent -- sh -lc 'tr "\0" "\n" < /proc/1/environ | grep -E "^(HOME|XDG_CONFIG_HOME|XDG_CACHE_HOME)="'
+kubectl -n <namespace> exec deploy/hermes-agent -- stat -c '%a %n' /opt/data/.ssh /opt/data/.ssh/id_ed25519 /opt/data/.ssh/id_ed25519.pub
+```
+
 ## Persistent Python addon venv
 
 The installer supports opt-in Python addon packages without rebuilding the Agent image:

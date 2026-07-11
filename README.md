@@ -114,6 +114,9 @@ Important variables:
 | `HERMES_BOOTSTRAP_MODE` | `disabled`, `missing` (default), or `overwrite` |
 | `HERMES_ADDON_REQUIREMENTS` | Optional local `requirements.txt` installed into a persistent addon venv |
 | `HERMES_ADDON_VENV` | Persistent addon venv path, default `/opt/data/addon-venv` |
+| `HERMES_HOME_AS_HOME` | Set Agent `HOME=/opt/data` and XDG dirs to persistent PVC paths, default `true` |
+| `HERMES_SSH_SETUP` | Prepare `/opt/data/.ssh` with safe permissions, default `true` |
+| `HERMES_SSH_KEY_PATH` | SSH private key path under `/opt/data/.ssh`, default `/opt/data/.ssh/id_ed25519` |
 
 Secrets may be generated automatically by `install.sh` when variables are omitted. The generated/used initial values are written to `.rendered/generated-credentials.txt` with mode `0600`; this path is gitignored, but you should still move the values to a password manager and delete the file after installation.
 
@@ -195,6 +198,51 @@ Modes:
 
 `auth.json` is excluded unless `HERMES_BOOTSTRAP_INCLUDE_AUTH=true`. Treat bootstrap archives as sensitive if they contain memories, `.env`, OAuth state, or private skills. The local `bootstrap/` and `.rendered/` paths are gitignored.
 
+## Persistent HOME and SSH keypair
+
+The Agent container can use the persistent Hermes home PVC as its Unix home directory. By default the installer sets the Agent process environment to:
+
+```text
+HOME=/opt/data
+XDG_CONFIG_HOME=/opt/data/.config
+XDG_CACHE_HOME=/opt/data/.cache
+```
+
+This makes normal CLI state and OpenSSH defaults land on the `hermes-home` PVC instead of the ephemeral container filesystem. The init job also prepares:
+
+```text
+/opt/data/.ssh/
+/opt/data/.ssh/known_hosts
+```
+
+with safe permissions. When `HERMES_SSH_SETUP=true`, the init job creates the SSH keypair only if `HERMES_SSH_KEY_PATH` is missing. Existing keys are preserved; private keys are never copied from examples or the public repo.
+
+```bash
+HERMES_HOME_AS_HOME=true
+HERMES_SSH_SETUP=true
+HERMES_SSH_KEY_TYPE=ed25519
+HERMES_SSH_KEY_PATH=/opt/data/.ssh/id_ed25519
+```
+
+After installation, fetch the public key and install it on target hosts:
+
+```bash
+kubectl -n <namespace> exec deploy/hermes-agent -- cat /opt/data/.ssh/id_ed25519.pub
+```
+
+Manual key management is also supported:
+
+```bash
+kubectl -n <namespace> exec -it deploy/hermes-agent -- /bin/bash
+mkdir -p /opt/data/.ssh
+ssh-keygen -t ed25519 -N '' -f /opt/data/.ssh/id_ed25519
+chmod 700 /opt/data/.ssh
+chmod 600 /opt/data/.ssh/id_ed25519
+chmod 644 /opt/data/.ssh/id_ed25519.pub
+```
+
+Do not commit private keys into `bootstrap/` or the public repo. If you bootstrap SSH material manually, treat the generated `.rendered/bootstrap.tar.gz` and Kubernetes Secret as sensitive.
+
 ## Persistent Python addon packages
 
 You can install additional Python CLI/tools without rebuilding the Agent image by pointing `HERMES_ADDON_REQUIREMENTS` at a local requirements file. The installer packages that file into the init Secret and the init job installs it into `HERMES_ADDON_VENV`, which must live under the persistent `/opt/data` PVC.
@@ -239,6 +287,8 @@ export PATH=/opt/data/addon-venv/bin:$PATH
 ```
 
 Do not mutate `/opt/hermes/.venv` or install ad-hoc packages into `/usr/local` if persistence matters. For production-standard system tools or OS packages, prefer a custom `HERMES_AGENT_IMAGE`.
+
+For a persistent Ansible control-node pattern, see [`docs/ansible.md`](docs/ansible.md) and `examples/bootstrap/requirements-ansible.txt`.
 
 ## Repository layout
 
