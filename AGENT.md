@@ -368,7 +368,7 @@ Redact tokens before sharing output.
 
 ## Persistent HOME and SSH
 
-The Agent deployment can set `HOME=/opt/data` and XDG dirs under `/opt/data` so CLI state and OpenSSH defaults persist on the `hermes-home` PVC. The init job prepares `/opt/data/.ssh` and optionally generates an SSH keypair when `HERMES_SSH_GENERATE_KEY=true`. Existing keys must be preserved; key generation is first-install/missing-only. Never commit private keys or real known_hosts/config data into public examples.
+The Agent deployment can set `HOME=/opt/data` and XDG dirs under `/opt/data` so CLI state and OpenSSH defaults persist on the `hermes-home` PVC. The init job prepares `/opt/data/.ssh` and generates an SSH keypair when `HERMES_SSH_SETUP=true` and the key is missing. Existing keys must be preserved; key generation is first-install/missing-only. Never commit private keys or real known_hosts/config data into public examples.
 
 Validation points:
 

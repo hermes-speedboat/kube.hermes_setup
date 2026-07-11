@@ -116,7 +116,6 @@ Important variables:
 | `HERMES_ADDON_VENV` | Persistent addon venv path, default `/opt/data/addon-venv` |
 | `HERMES_HOME_AS_HOME` | Set Agent `HOME=/opt/data` and XDG dirs to persistent PVC paths, default `true` |
 | `HERMES_SSH_SETUP` | Prepare `/opt/data/.ssh` with safe permissions, default `true` |
-| `HERMES_SSH_GENERATE_KEY` | Generate a persistent SSH keypair on first install, default `false` |
 | `HERMES_SSH_KEY_PATH` | SSH private key path under `/opt/data/.ssh`, default `/opt/data/.ssh/id_ed25519` |
 
 Secrets may be generated automatically by `install.sh` when variables are omitted. The generated/used initial values are written to `.rendered/generated-credentials.txt` with mode `0600`; this path is gitignored, but you should still move the values to a password manager and delete the file after installation.
@@ -216,12 +215,11 @@ This makes normal CLI state and OpenSSH defaults land on the `hermes-home` PVC i
 /opt/data/.ssh/known_hosts
 ```
 
-with safe permissions. SSH key generation is opt-in:
+with safe permissions. When `HERMES_SSH_SETUP=true`, the init job creates the SSH keypair only if `HERMES_SSH_KEY_PATH` is missing. Existing keys are preserved; private keys are never copied from examples or the public repo.
 
 ```bash
 HERMES_HOME_AS_HOME=true
 HERMES_SSH_SETUP=true
-HERMES_SSH_GENERATE_KEY=true
 HERMES_SSH_KEY_TYPE=ed25519
 HERMES_SSH_KEY_PATH=/opt/data/.ssh/id_ed25519
 ```
@@ -289,6 +287,8 @@ export PATH=/opt/data/addon-venv/bin:$PATH
 ```
 
 Do not mutate `/opt/hermes/.venv` or install ad-hoc packages into `/usr/local` if persistence matters. For production-standard system tools or OS packages, prefer a custom `HERMES_AGENT_IMAGE`.
+
+For a persistent Ansible control-node pattern, see [`docs/ansible.md`](docs/ansible.md) and `examples/bootstrap/requirements-ansible.txt`.
 
 ## Repository layout
 

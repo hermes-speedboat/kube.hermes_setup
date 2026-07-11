@@ -125,8 +125,6 @@ check_agent_home_ssh() {
     fail "persistent SSH directory invalid or wrong mode (${ssh_dir_mode:-missing})"
   fi
 
-  ssh_generate="${HERMES_SSH_GENERATE_KEY:-false}"
-  [[ "$ssh_generate" =~ ^(1|true|TRUE|yes|YES|on|ON)$ ]] || return 0
   key_path="${HERMES_SSH_KEY_PATH:-/opt/data/.ssh/id_ed25519}"
   key_mode="$(kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -lc 'p="$0"; test -s "$p" && stat -c %a "$p"' "$key_path" 2>/dev/null || true)"
   pub_mode="$(kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -lc 'p="$0.pub"; test -s "$p" && stat -c %a "$p"' "$key_path" 2>/dev/null || true)"

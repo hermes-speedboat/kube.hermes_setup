@@ -262,7 +262,6 @@ The Agent deployment supports a persistent Unix home and SSH directory on the `h
 ```bash
 HERMES_HOME_AS_HOME=true
 HERMES_SSH_SETUP=true
-HERMES_SSH_GENERATE_KEY=false
 HERMES_SSH_KEY_TYPE=ed25519
 HERMES_SSH_KEY_PATH=/opt/data/.ssh/id_ed25519
 ```
@@ -271,7 +270,7 @@ Operational behavior:
 
 - `HOME=/opt/data`, `XDG_CONFIG_HOME=/opt/data/.config`, and `XDG_CACHE_HOME=/opt/data/.cache` are set on the Agent process.
 - `/opt/data/.ssh` is created with mode `700`; `known_hosts` is created with mode `644`.
-- If `HERMES_SSH_GENERATE_KEY=true`, the init job generates the key only when `HERMES_SSH_KEY_PATH` does not already exist. Existing keys are preserved.
+- If `HERMES_SSH_SETUP=true`, the init job generates the key only when `HERMES_SSH_KEY_PATH` does not already exist. Existing keys are preserved.
 - Private keys are forced to mode `600`; public keys are forced to mode `644`.
 
 Fetch the generated public key:
