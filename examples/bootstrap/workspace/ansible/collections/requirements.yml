@@ -1,0 +1,4 @@
+---
+# Install with:
+# ansible-galaxy collection install -r /workspace/ansible/collections/requirements.yml -p /workspace/ansible/collections
+collections: []

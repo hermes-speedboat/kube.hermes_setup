@@ -1,0 +1,4 @@
+---
+# Install with:
+# ansible-galaxy role install -r /workspace/ansible/roles/requirements.yml -p /workspace/ansible/roles
+roles: []
