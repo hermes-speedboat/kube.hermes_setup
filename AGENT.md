@@ -382,9 +382,10 @@ kubectl -n <namespace> exec deploy/hermes-agent -- stat -c '%a %n' /opt/data/.ss
 The installer supports opt-in Python addon packages without rebuilding the Agent image:
 
 - `HERMES_ADDON_REQUIREMENTS` points to a local requirements file on the operator machine.
-- `HERMES_ADDON_VENV` defaults to `/opt/data/addon-venv` and must remain under `/opt/data` for PVC persistence.
-- `install.sh` packages the requirements file into `hermes-bootstrap-archive`; the init job installs it into the addon venv.
-- The Agent container `PATH` includes `${HERMES_ADDON_VENV}/bin` after `/opt/hermes/.venv/bin` so console scripts are discoverable without shadowing Hermes' own Python runtime.
+- Addon Python is fixed to `HERMES_ADDON_PYTHON_MODE=uv`, `HERMES_UV_DIR=/opt/data/uv`, and `HERMES_ADDON_VENV=/opt/data/addon-venv`; keep those hard facts out of `hermes.env.example`.
+- `HERMES_ADDON_PYTHON_VERSION` defaults to `3.13` and is the only addon Python runtime knob exposed to operators.
+- `install.sh` packages the requirements file into `hermes-bootstrap-archive`; the init job installs uv, a uv-managed Python runtime, and the addon venv on the `/opt/data` PVC.
+- The Agent and WebUI container `PATH` values include `/opt/data/addon-venv/bin` and `/opt/data/uv/bin` so console scripts work from both containers without requiring system Python in WebUI.
 
 Do not install extra packages into `/opt/hermes/.venv` for this feature; keep addon packages isolated or build a custom `HERMES_AGENT_IMAGE` for production-standard dependencies.
 

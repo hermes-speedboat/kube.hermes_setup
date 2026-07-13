@@ -221,26 +221,26 @@ Keep `HERMES_WRITE_SAFE_ROOT` on Agent, Dashboard, and WebUI so file tools use t
 
 ## Persistent Python addon packages
 
-Set `HERMES_ADDON_REQUIREMENTS` to install Python packages during `install.sh` without rebuilding the Agent image. The requirements file is packaged into the same init Secret mechanism as bootstrap data and installed into `HERMES_ADDON_VENV` on the `/opt/data` PVC.
+Set `HERMES_ADDON_REQUIREMENTS` to install Python packages during `install.sh` without rebuilding images. The requirements file is packaged into the same init Secret mechanism as bootstrap data and installed into a uv-managed Python runtime under `/opt/data`.
 
 ```bash
 HERMES_ADDON_REQUIREMENTS=./bootstrap/requirements.txt
-HERMES_ADDON_VENV=/opt/data/addon-venv
+HERMES_ADDON_PYTHON_VERSION=3.13
 ENV_FILE=./hermes.env ./install.sh
 ```
 
 Operational properties:
 
-- Persistent: `/opt/data/addon-venv` survives Pod recreation.
+- Persistent: the uv runtime and addon venv live on the `/opt/data` PVC and survive Pod recreation.
+- Cross-container: the same Python, `ansible`, and other addon CLIs are usable from both `hermes-agent` and `hermes-webui` even if the WebUI image has no system Python.
 - Re-runnable: changing the requirements file and rerunning `install.sh` updates the venv.
-- Isolated: Hermes' own `/opt/hermes/.venv` remains first in `PATH`; do not install ad-hoc packages there.
-- Manual installs are supported:
+- Isolated: Hermes' own `/opt/hermes/.venv` remains first in the Agent `PATH`; do not install ad-hoc packages there.
+- Migrating: if an older non-uv addon venv exists, the init job replaces it with a uv-managed venv.
+- Manual installs are supported after the runtime exists:
 
 ```bash
 kubectl -n <namespace> exec -it deploy/hermes-agent -- /bin/bash
-python3 -m venv /opt/data/addon-venv
-/opt/data/addon-venv/bin/pip install --upgrade pip
-/opt/data/addon-venv/bin/pip install <package>
+/opt/data/addon-venv/bin/python -m pip install <package>
 ```
 
 Use absolute paths for the addon interpreter when required:
@@ -252,7 +252,7 @@ Use absolute paths for the addon interpreter when required:
 If an interactive `kubectl exec` shell resets `PATH`, export the addon path manually for that shell:
 
 ```bash
-export PATH=/opt/data/addon-venv/bin:$PATH
+export PATH=/opt/data/addon-venv/bin:/opt/data/uv/bin:$PATH
 ```
 
 ## Persistent HOME and SSH

@@ -10,7 +10,7 @@ Copy the example bootstrap tree and point the installer at the Ansible requireme
 cp -a examples/bootstrap ./bootstrap
 cat >> hermes.env <<'EOF'
 HERMES_ADDON_REQUIREMENTS=./bootstrap/requirements.txt
-HERMES_ADDON_VENV=/opt/data/addon-venv
+HERMES_ADDON_PYTHON_VERSION=3.13
 HERMES_BOOTSTRAP_DIR=./bootstrap
 HERMES_BOOTSTRAP_MODE=missing
 HERMES_HOME_AS_HOME=true
@@ -19,7 +19,7 @@ EOF
 ENV_FILE=./hermes.env ./install.sh
 ```
 
-The packages are installed into `/opt/data/addon-venv`, which is PVC-backed and survives Pod recreation.
+The packages are installed into `/opt/data/addon-venv`, backed by a uv-managed Python runtime under `/opt/data/uv`. Both paths are PVC-backed and survive Pod recreation. Because the Python runtime is under `/opt/data`, the same Ansible CLI works from both `hermes-agent` and `hermes-webui` containers.
 
 The installer also ensures this Ansible project directory exists on the shared workspace PVC, even when no bootstrap directory is provided:
 
@@ -33,6 +33,8 @@ If `HERMES_BOOTSTRAP_DIR=./bootstrap` is set, the example Ansible files from `bo
 
 ```bash
 kubectl -n <namespace> exec deploy/hermes-agent -- ansible --version
+kubectl -n <namespace> exec deploy/hermes-webui -- ansible --version
+kubectl -n <namespace> exec deploy/hermes-webui -- python --version
 kubectl -n <namespace> exec deploy/hermes-agent -- sh -lc 'echo "$ANSIBLE_CONFIG"; ls -la /workspace/ansible'
 kubectl -n <namespace> exec deploy/hermes-agent -- sh -lc 'cd /workspace/ansible && ansible-inventory --list'
 kubectl -n <namespace> exec deploy/hermes-agent -- sh -lc 'cd /workspace/ansible && ansible-playbook playbooks/ping-local.yml'
@@ -69,7 +71,8 @@ Keep host key checking enabled. Maintain `/opt/data/.ssh/known_hosts` or use rev
 Important paths:
 
 ```text
-/opt/data/addon-venv                # persistent Python addon venv
+/opt/data/uv                        # persistent uv binary, cache helper path, and managed Python installs
+/opt/data/addon-venv                # persistent uv-created Python addon venv
 /opt/data/.ssh                      # persistent SSH keys/config/known_hosts
 /opt/data/ansible/tmp               # Ansible local temp
 /opt/data/ansible/cp                # SSH ControlPath directory
@@ -83,11 +86,18 @@ Important paths:
 /workspace/ansible/host_vars        # host variables
 ```
 
-The Agent deployment sets:
+The Agent and WebUI deployments set:
 
 ```text
 ANSIBLE_CONFIG=/workspace/ansible/ansible.cfg
+HOME=/opt/data
+XDG_CONFIG_HOME=/opt/data/.config
+XDG_CACHE_HOME=/opt/data/.cache
+LANG=C.UTF-8
+LC_ALL=C.UTF-8
 ```
+
+The UTF-8 locale is required because Ansible refuses to start when Python reports no locale encoding inside the WebUI container.
 
 ## Roles and collections
 

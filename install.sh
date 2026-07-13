@@ -65,7 +65,11 @@ prepare_defaults() {
   export HERMES_BOOTSTRAP_MODE="${HERMES_BOOTSTRAP_MODE:-missing}"
   export HERMES_BOOTSTRAP_INCLUDE_AUTH="${HERMES_BOOTSTRAP_INCLUDE_AUTH:-false}"
   export HERMES_ADDON_REQUIREMENTS="${HERMES_ADDON_REQUIREMENTS:-}"
-  export HERMES_ADDON_VENV="${HERMES_ADDON_VENV:-/opt/data/addon-venv}"
+  # Hard-coded addon runtime facts. Keep these out of hermes.env examples unless the chart changes.
+  export HERMES_ADDON_PYTHON_MODE="uv"
+  export HERMES_UV_DIR="/opt/data/uv"
+  export HERMES_ADDON_VENV="/opt/data/addon-venv"
+  export HERMES_ADDON_PYTHON_VERSION="${HERMES_ADDON_PYTHON_VERSION:-3.13}"
   export HERMES_HOME_AS_HOME="${HERMES_HOME_AS_HOME:-true}"
   export HERMES_SSH_SETUP="${HERMES_SSH_SETUP:-true}"
   export HERMES_SSH_GENERATE_KEY="${HERMES_SSH_GENERATE_KEY:-${HERMES_SSH_SETUP}}"
@@ -121,7 +125,10 @@ prepare_defaults() {
     require_cmd tar
     [[ -f "$HERMES_ADDON_REQUIREMENTS" ]] || fail "HERMES_ADDON_REQUIREMENTS does not exist or is not a file: $HERMES_ADDON_REQUIREMENTS"
   fi
+  [[ "$HERMES_ADDON_PYTHON_MODE" = "uv" ]] || fail "HERMES_ADDON_PYTHON_MODE is fixed to uv"
+  [[ "$HERMES_UV_DIR" = /opt/data/* ]] || fail "HERMES_UV_DIR must be under /opt/data for PVC persistence"
   [[ "$HERMES_ADDON_VENV" = /opt/data/* ]] || fail "HERMES_ADDON_VENV must be under /opt/data for PVC persistence"
+  [[ "$HERMES_ADDON_PYTHON_VERSION" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]] || fail "HERMES_ADDON_PYTHON_VERSION must look like 3.13 or 3.13.5"
   case "$HERMES_HOME_AS_HOME" in true|false|TRUE|FALSE|1|0|yes|no|YES|NO|on|off|ON|OFF) ;; *) fail "HERMES_HOME_AS_HOME must be boolean" ;; esac
   case "$HERMES_SSH_SETUP" in true|false|TRUE|FALSE|1|0|yes|no|YES|NO|on|off|ON|OFF) ;; *) fail "HERMES_SSH_SETUP must be boolean" ;; esac
   case "$HERMES_SSH_GENERATE_KEY" in true|false|TRUE|FALSE|1|0|yes|no|YES|NO|on|off|ON|OFF) ;; *) fail "HERMES_SSH_GENERATE_KEY must be boolean" ;; esac

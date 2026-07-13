@@ -56,8 +56,22 @@ spec:
         env:
         - name: HERMES_BOOTSTRAP_MODE
           value: "${HERMES_BOOTSTRAP_MODE}"
+        - name: HERMES_ADDON_PYTHON_MODE
+          value: "${HERMES_ADDON_PYTHON_MODE}"
+        - name: HERMES_UV_DIR
+          value: "${HERMES_UV_DIR}"
         - name: HERMES_ADDON_VENV
           value: "${HERMES_ADDON_VENV}"
+        - name: HERMES_ADDON_PYTHON_VERSION
+          value: "${HERMES_ADDON_PYTHON_VERSION}"
+        - name: UV_PYTHON_INSTALL_DIR
+          value: "${HERMES_UV_DIR}/python"
+        - name: UV_CACHE_DIR
+          value: /opt/data/.cache/uv
+        - name: LANG
+          value: C.UTF-8
+        - name: LC_ALL
+          value: C.UTF-8
         - name: HERMES_SSH_SETUP
           value: "${HERMES_SSH_SETUP}"
         - name: HERMES_SSH_GENERATE_KEY
@@ -132,9 +146,21 @@ spec:
               fi
             fi
             if [ -f /tmp/hermes-bootstrap/addons/requirements.txt ]; then
-              python3 -m venv "$HERMES_ADDON_VENV"
-              "$HERMES_ADDON_VENV/bin/pip" install --upgrade pip
-              "$HERMES_ADDON_VENV/bin/pip" install -r /tmp/hermes-bootstrap/addons/requirements.txt
+              mkdir -p "$HERMES_UV_DIR/bin" "$UV_PYTHON_INSTALL_DIR" "$UV_CACHE_DIR" /opt/data/.local/bin
+              if [ ! -x "$HERMES_UV_DIR/bin/uv" ]; then
+                command -v curl >/dev/null 2>&1 || { echo "curl is required to install uv" >&2; exit 1; }
+                curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR="$HERMES_UV_DIR/bin" sh
+              fi
+              export PATH="$HERMES_UV_DIR/bin:$PATH"
+              uv --version
+              uv python install "$HERMES_ADDON_PYTHON_VERSION"
+              if [ ! -x "$HERMES_ADDON_VENV/bin/python" ] || [ ! -f "$HERMES_ADDON_VENV/.hermes-uv-managed" ]; then
+                rm -rf "$HERMES_ADDON_VENV"
+                uv venv --seed --python "$HERMES_ADDON_PYTHON_VERSION" "$HERMES_ADDON_VENV"
+                touch "$HERMES_ADDON_VENV/.hermes-uv-managed"
+              fi
+              "$HERMES_ADDON_VENV/bin/python" -m pip install --upgrade pip
+              uv pip install --python "$HERMES_ADDON_VENV/bin/python" -r /tmp/hermes-bootstrap/addons/requirements.txt
             fi
             rm -rf /tmp/hermes-bootstrap
           fi
@@ -272,14 +298,28 @@ spec:
           value: "${HERMES_XDG_CONFIG_HOME}"
         - name: XDG_CACHE_HOME
           value: "${HERMES_XDG_CACHE_HOME}"
+        - name: LANG
+          value: C.UTF-8
+        - name: LC_ALL
+          value: C.UTF-8
         - name: HERMES_WRITE_SAFE_ROOT
           value: /opt/data:/workspace
+        - name: HERMES_ADDON_PYTHON_MODE
+          value: "${HERMES_ADDON_PYTHON_MODE}"
+        - name: HERMES_UV_DIR
+          value: "${HERMES_UV_DIR}"
         - name: HERMES_ADDON_VENV
           value: "${HERMES_ADDON_VENV}"
+        - name: HERMES_ADDON_PYTHON_VERSION
+          value: "${HERMES_ADDON_PYTHON_VERSION}"
+        - name: UV_PYTHON_INSTALL_DIR
+          value: "${HERMES_UV_DIR}/python"
+        - name: UV_CACHE_DIR
+          value: /opt/data/.cache/uv
         - name: ANSIBLE_CONFIG
           value: /workspace/ansible/ansible.cfg
         - name: PATH
-          value: /opt/hermes/bin:/opt/hermes/.venv/bin:${HERMES_ADDON_VENV}/bin:/opt/data/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+          value: /opt/hermes/bin:/opt/hermes/.venv/bin:${HERMES_ADDON_VENV}/bin:${HERMES_UV_DIR}/bin:/opt/data/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         - name: API_SERVER_ENABLED
           value: "true"
         - name: API_SERVER_HOST
@@ -382,6 +422,10 @@ spec:
         env:
         - name: HERMES_HOME
           value: /opt/data
+        - name: LANG
+          value: C.UTF-8
+        - name: LC_ALL
+          value: C.UTF-8
         - name: HERMES_WRITE_SAFE_ROOT
           value: /opt/data:/workspace
         - name: HERMES_DASHBOARD_FILES_ROOT
@@ -519,6 +563,16 @@ spec:
         env:
         - name: HERMES_HOME
           value: /opt/data
+        - name: HOME
+          value: "${HERMES_CONTAINER_HOME}"
+        - name: XDG_CONFIG_HOME
+          value: "${HERMES_XDG_CONFIG_HOME}"
+        - name: XDG_CACHE_HOME
+          value: "${HERMES_XDG_CACHE_HOME}"
+        - name: LANG
+          value: C.UTF-8
+        - name: LC_ALL
+          value: C.UTF-8
         - name: HERMES_WRITE_SAFE_ROOT
           value: /opt/data:/workspace
         - name: HERMES_WEBUI_HOST
@@ -538,8 +592,22 @@ spec:
               key: password
         - name: HERMES_WEBUI_MAX_UPLOAD_MB
           value: "${HERMES_WEBUI_MAX_UPLOAD_MB}"
+        - name: HERMES_ADDON_PYTHON_MODE
+          value: "${HERMES_ADDON_PYTHON_MODE}"
+        - name: HERMES_UV_DIR
+          value: "${HERMES_UV_DIR}"
+        - name: HERMES_ADDON_VENV
+          value: "${HERMES_ADDON_VENV}"
+        - name: HERMES_ADDON_PYTHON_VERSION
+          value: "${HERMES_ADDON_PYTHON_VERSION}"
+        - name: UV_PYTHON_INSTALL_DIR
+          value: "${HERMES_UV_DIR}/python"
+        - name: UV_CACHE_DIR
+          value: /opt/data/.cache/uv
+        - name: ANSIBLE_CONFIG
+          value: /workspace/ansible/ansible.cfg
         - name: PATH
-          value: /opt/data/node/bin:/opt/data/node_modules/.bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+          value: ${HERMES_ADDON_VENV}/bin:${HERMES_UV_DIR}/bin:/opt/data/node/bin:/opt/data/node_modules/.bin:/opt/data/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         - name: HERMES_API_URL
           value: http://hermes-agent:8642
         - name: HERMES_API_KEY
