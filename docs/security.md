@@ -40,8 +40,6 @@ The setup has two application auth layers:
 | Hermes Dashboard BasicAuth | Dashboard application login | `DASHBOARD_AUTH_USER` / `DASHBOARD_AUTH_PASSWORD` | Always configured |
 | Hermes WebUI password auth | WebUI application login | `HERMES_WEBUI_PASSWORD` from `secret/hermes-dashboard-auth:password` | Always configured |
 
-Edge authentication, if required, should be provided by an external Ingress/auth layer outside this installer.
-
 ## TLS
 
 Terminate TLS at your Ingress controller. This template supports Ingress TLS references but does not manage certificates.
