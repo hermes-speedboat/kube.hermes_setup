@@ -148,6 +148,25 @@ check_webui_agent_source() {
 
 
 
+check_addon_python_runtime() {
+  [[ -n "${HERMES_ADDON_REQUIREMENTS:-}" ]] || return 0
+  local app pod py_out ansible_out
+  for app in hermes-agent hermes-webui; do
+    pod="$(kubectl -n "$HERMES_NAMESPACE" get pods -l app="$app" --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+    [[ -n "$pod" ]] || { fail "no running $app pod for addon Python check"; continue; }
+    py_out="$(kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -c 'test -x /opt/data/uv/bin/uv && test -f /opt/data/addon-venv/.hermes-uv-managed && /opt/data/addon-venv/bin/python --version' 2>/dev/null || true)"
+    if [[ "$py_out" == Python\ * ]]; then
+      ok "$app uv-managed addon Python ${py_out#Python }"
+    else
+      fail "$app uv-managed addon Python missing or broken"
+    fi
+    ansible_out="$(kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -c 'if [ -x /opt/data/addon-venv/bin/ansible ]; then /opt/data/addon-venv/bin/ansible --version | sed -n "1p"; fi' 2>/dev/null || true)"
+    if [[ "$ansible_out" == ansible\ * ]]; then
+      ok "$app addon Ansible available (${ansible_out})"
+    fi
+  done
+}
+
 check_dashboard_workspace_root() {
   local pod root roots
   pod=$(kubectl -n "$HERMES_NAMESPACE" get pod -l app=hermes-dashboard --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
@@ -210,6 +229,7 @@ main() {
   check_internal_health
   check_agent_home_ssh
   check_webui_agent_source
+  check_addon_python_runtime
   check_dashboard_workspace_root
   check_webui_upload_limit
   check_browser_cdp

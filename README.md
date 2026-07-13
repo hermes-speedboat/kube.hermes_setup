@@ -113,7 +113,7 @@ Important variables:
 | `HERMES_BOOTSTRAP_DIR` | Optional local bootstrap directory for SOUL.md, memories, skills, plugins, cron, config, and workspace files |
 | `HERMES_BOOTSTRAP_MODE` | `disabled`, `missing` (default), or `overwrite` |
 | `HERMES_ADDON_REQUIREMENTS` | Optional local `requirements.txt` installed into a persistent addon venv |
-| `HERMES_ADDON_VENV` | Persistent addon venv path, default `/opt/data/addon-venv` |
+| `HERMES_ADDON_PYTHON_VERSION` | Optional uv-managed addon Python version, default `3.13` |
 | `HERMES_HOME_AS_HOME` | Set Agent `HOME=/opt/data` and XDG dirs to persistent PVC paths, default `true` |
 | `HERMES_SSH_SETUP` | Prepare `/opt/data/.ssh` with safe permissions, default `true` |
 | `HERMES_SSH_KEY_PATH` | SSH private key path under `/opt/data/.ssh`, default `/opt/data/.ssh/id_ed25519` |
@@ -208,7 +208,7 @@ XDG_CONFIG_HOME=/opt/data/.config
 XDG_CACHE_HOME=/opt/data/.cache
 ```
 
-This makes normal CLI state and OpenSSH defaults land on the `hermes-home` PVC instead of the ephemeral container filesystem. The init job also prepares:
+This makes normal CLI state and OpenSSH defaults land on the `hermes-home` PVC instead of the ephemeral container filesystem. Agent/WebUI containers also use a UTF-8 locale so Python addon CLIs such as Ansible can start reliably. The init job also prepares:
 
 ```text
 /opt/data/.ssh/
@@ -245,7 +245,21 @@ Do not commit private keys into `bootstrap/` or the public repo. If you bootstra
 
 ## Persistent Python addon packages
 
-You can install additional Python CLI/tools without rebuilding the Agent image by pointing `HERMES_ADDON_REQUIREMENTS` at a local requirements file. The installer packages that file into the init Secret and the init job installs it into `HERMES_ADDON_VENV`, which must live under the persistent `/opt/data` PVC.
+You can install additional Python CLI/tools without rebuilding the Agent image by pointing `HERMES_ADDON_REQUIREMENTS` at a local requirements file. The installer packages that file into the init Secret and the init job installs it into a uv-managed Python runtime and venv on the persistent `/opt/data` PVC. This makes the addon Python usable from both the Agent and WebUI containers, even when the WebUI image has no system Python.
+
+Hard-coded addon runtime paths:
+
+```text
+HERMES_ADDON_PYTHON_MODE=uv
+HERMES_UV_DIR=/opt/data/uv
+HERMES_ADDON_VENV=/opt/data/addon-venv
+```
+
+Only the Python version is configurable:
+
+```bash
+HERMES_ADDON_PYTHON_VERSION=3.13
+```
 
 Example:
 
@@ -254,15 +268,19 @@ cp examples/bootstrap/requirements.txt ./bootstrap/requirements.txt
 # edit ./bootstrap/requirements.txt, preferably with pinned versions
 cat >> hermes.env <<'EOF'
 HERMES_ADDON_REQUIREMENTS=./bootstrap/requirements.txt
-HERMES_ADDON_VENV=/opt/data/addon-venv
+HERMES_ADDON_PYTHON_VERSION=3.13
 EOF
 ENV_FILE=./hermes.env ./install.sh
 ```
 
-The Agent container PATH includes the addon venv after Hermes' own venv:
+The Agent container PATH includes the addon venv after Hermes' own venv, and the WebUI container PATH includes it before its normal paths:
 
 ```text
-/opt/hermes/bin:/opt/hermes/.venv/bin:/opt/data/addon-venv/bin:/opt/data/.local/bin:...
+# Agent
+/opt/hermes/bin:/opt/hermes/.venv/bin:/opt/data/addon-venv/bin:/opt/data/uv/bin:...
+
+# WebUI
+/opt/data/addon-venv/bin:/opt/data/uv/bin:/opt/data/node/bin:...
 ```
 
 This makes console scripts installed by the requirements file available to Hermes terminal calls while keeping Hermes' own Python environment first. If you need the addon Python interpreter itself, call it explicitly:
@@ -275,9 +293,7 @@ Manual installs are also possible and persistent because the venv is on the PVC:
 
 ```bash
 kubectl -n <namespace> exec -it deploy/hermes-agent -- /bin/bash
-python3 -m venv /opt/data/addon-venv
-/opt/data/addon-venv/bin/pip install --upgrade pip
-/opt/data/addon-venv/bin/pip install <package>
+/opt/data/addon-venv/bin/python -m pip install <package>
 ```
 
 Some interactive shells reset `PATH`. If `echo $PATH` does not show the addon venv, either use absolute paths or export it for that shell:
@@ -286,7 +302,7 @@ Some interactive shells reset `PATH`. If `echo $PATH` does not show the addon ve
 export PATH=/opt/data/addon-venv/bin:$PATH
 ```
 
-Do not mutate `/opt/hermes/.venv` or install ad-hoc packages into `/usr/local` if persistence matters. For production-standard system tools or OS packages, prefer a custom `HERMES_AGENT_IMAGE`.
+Do not mutate `/opt/hermes/.venv` or install ad-hoc packages into `/usr/local` if persistence matters. If a previous install created `/opt/data/addon-venv` with system Python, rerunning the installer migrates it to a uv-managed venv so the same Python works from WebUI too. For production-standard system tools or OS packages, prefer a custom `HERMES_AGENT_IMAGE`.
 
 For a persistent Ansible control-node pattern, including mount locations and visible roles/collections paths under `/workspace/ansible`, see [`docs/ansible.md`](docs/ansible.md) and `examples/bootstrap/requirements.txt`.
 
