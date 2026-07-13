@@ -33,17 +33,12 @@ Never print the full value in logs or docs.
 
 ## Ingress authentication
 
-The setup has three separate auth layers:
+The setup has two application auth layers:
 
 | Layer | Scope | Controlled by | Notes |
 |---|---|---|---|
-| Traefik Ingress BasicAuth | WebUI + Dashboard edge access | `ENABLE_TRAEFIK_BASIC_AUTH=true|false` | Optional, recommended for public exposure |
 | Hermes Dashboard BasicAuth | Dashboard application login | `DASHBOARD_AUTH_USER` / `DASHBOARD_AUTH_PASSWORD` | Always configured |
 | Hermes WebUI password auth | WebUI application login | `HERMES_WEBUI_PASSWORD` from `secret/hermes-dashboard-auth:password` | Always configured |
-
-Traefik BasicAuth follows the normal Traefik pattern: an `htpasswd`-style users file stored in a Kubernetes Secret and referenced by a Traefik `Middleware` on the Ingress.
-
-Disable Traefik BasicAuth only if another trusted layer protects the Ingress, for example VPN, Cloudflare Access, corporate SSO, or a private lab network.
 
 ## TLS
 
@@ -79,10 +74,6 @@ The scripts avoid passing plaintext passwords as command-line arguments to `open
 
 `.rendered/` is gitignored. Treat these files as secrets and remove them after storing values in a password manager.
 
-
-## Default edge authentication
-
-The repo default is `ENABLE_TRAEFIK_BASIC_AUTH=false`. Enable it explicitly for public environments where an additional Traefik edge BasicAuth layer is desired. Dashboard internal authentication remains independent.
 
 
 ## WebUI first-password bootstrap

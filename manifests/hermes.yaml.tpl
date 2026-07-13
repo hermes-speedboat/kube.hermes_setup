@@ -27,7 +27,6 @@ spec:
     requests:
       storage: ${HERMES_WORKSPACE_STORAGE_SIZE}
 ---
-${TRAEFIK_BASIC_AUTH_MIDDLEWARE}
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
@@ -164,7 +163,7 @@ spec:
             fi
             rm -rf /tmp/hermes-bootstrap
           fi
-          if [ ! -f /opt/data/config.yaml ]; then
+          write_default_config() {
             {
               printf '%s\n' 'provider: ${MODEL_PROVIDER}'
               printf '%s\n' 'model: ${MODEL_NAME}'
@@ -178,6 +177,14 @@ spec:
               printf '%s\n' '  host: 0.0.0.0'
               printf '%s\n' '  port: 8642'
             } > /opt/data/config.yaml
+          }
+          if [ ! -f /opt/data/config.yaml ]; then
+            write_default_config
+          elif grep -q 'anthropic/claude-opus-4.6' /opt/data/config.yaml 2>/dev/null && grep -q 'provider: auto' /opt/data/config.yaml 2>/dev/null; then
+            # Some Agent images seed /opt/data/config.yaml before this init script runs.
+            # Replace only that untouched image default; preserve any operator-managed config.
+            cp /opt/data/config.yaml "/opt/data/config.yaml.image-default-$(date -u +%Y%m%dT%H%M%SZ).bak"
+            write_default_config
           fi
           if [ ! -f /opt/data/SOUL.md ]; then
             {
@@ -293,11 +300,11 @@ spec:
         - name: HERMES_HOME
           value: /opt/data
         - name: HOME
-          value: "${HERMES_CONTAINER_HOME}"
+          value: /opt/data
         - name: XDG_CONFIG_HOME
-          value: "${HERMES_XDG_CONFIG_HOME}"
+          value: /opt/data/.config
         - name: XDG_CACHE_HOME
-          value: "${HERMES_XDG_CACHE_HOME}"
+          value: /opt/data/.cache
         - name: LANG
           value: C.UTF-8
         - name: LC_ALL
@@ -398,7 +405,7 @@ spec:
         args:
         - |
           set -eu
-          mkdir -p /opt/data /workspace
+          mkdir -p /opt/data /workspace/ansible/collections /workspace/ansible/group_vars /workspace/ansible/host_vars /workspace/ansible/inventory /workspace/ansible/playbooks /workspace/ansible/roles /opt/data/ansible/cp /opt/data/ansible/tmp
           chown -R ${HERMES_RUNTIME_UID}:${HERMES_RUNTIME_GID} /opt/data /workspace
           chmod 700 /opt/data
           [ ! -d /opt/data/.ssh ] || chmod 700 /opt/data/.ssh
@@ -422,6 +429,12 @@ spec:
         env:
         - name: HERMES_HOME
           value: /opt/data
+        - name: HOME
+          value: /opt/data
+        - name: XDG_CONFIG_HOME
+          value: /opt/data/.config
+        - name: XDG_CACHE_HOME
+          value: /opt/data/.cache
         - name: LANG
           value: C.UTF-8
         - name: LC_ALL
@@ -430,6 +443,22 @@ spec:
           value: /opt/data:/workspace
         - name: HERMES_DASHBOARD_FILES_ROOT
           value: /workspace
+        - name: HERMES_ADDON_PYTHON_MODE
+          value: "${HERMES_ADDON_PYTHON_MODE}"
+        - name: HERMES_UV_DIR
+          value: "${HERMES_UV_DIR}"
+        - name: HERMES_ADDON_VENV
+          value: "${HERMES_ADDON_VENV}"
+        - name: HERMES_ADDON_PYTHON_VERSION
+          value: "${HERMES_ADDON_PYTHON_VERSION}"
+        - name: UV_PYTHON_INSTALL_DIR
+          value: "${HERMES_UV_DIR}/python"
+        - name: UV_CACHE_DIR
+          value: /opt/data/.cache/uv
+        - name: ANSIBLE_CONFIG
+          value: /workspace/ansible/ansible.cfg
+        - name: PATH
+          value: /opt/hermes/bin:/opt/hermes/.venv/bin:${HERMES_ADDON_VENV}/bin:${HERMES_UV_DIR}/bin:/opt/data/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         - name: HERMES_DASHBOARD_BASIC_AUTH_USERNAME
           valueFrom:
             secretKeyRef:
@@ -564,11 +593,11 @@ spec:
         - name: HERMES_HOME
           value: /opt/data
         - name: HOME
-          value: "${HERMES_CONTAINER_HOME}"
+          value: /opt/data
         - name: XDG_CONFIG_HOME
-          value: "${HERMES_XDG_CONFIG_HOME}"
+          value: /opt/data/.config
         - name: XDG_CACHE_HOME
-          value: "${HERMES_XDG_CACHE_HOME}"
+          value: /opt/data/.cache
         - name: LANG
           value: C.UTF-8
         - name: LC_ALL
@@ -839,7 +868,6 @@ metadata:
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: ${TRAEFIK_ENTRYPOINT}
     traefik.ingress.kubernetes.io/router.tls: "${TLS_ENABLED}"
-${WEBUI_BASIC_AUTH_ANNOTATION}
 spec:
   ingressClassName: ${INGRESS_CLASS_NAME}
   ${TLS_SECRET_NAME:+tls:
@@ -866,7 +894,6 @@ metadata:
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: ${TRAEFIK_ENTRYPOINT}
     traefik.ingress.kubernetes.io/router.tls: "${TLS_ENABLED}"
-${DASHBOARD_BASIC_AUTH_ANNOTATION}
 spec:
   ingressClassName: ${INGRESS_CLASS_NAME}
   ${TLS_SECRET_NAME:+tls:

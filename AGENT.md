@@ -21,8 +21,7 @@ Keep these defaults in source unless the maintainer explicitly asks otherwise:
 
 ```bash
 MODEL_PROVIDER=codex
-MODEL_NAME=gpt-5.5
-ENABLE_TRAEFIK_BASIC_AUTH=false
+MODEL_NAME=gpt-5.6-luna
 BROWSER_CONCURRENT=1
 BROWSER_QUEUED=10
 HERMES_RUNTIME_UID=10000
@@ -32,8 +31,7 @@ HERMES_WEBUI_MAX_UPLOAD_MB=220
 
 Rationale:
 
-- `gpt-5.5` + `codex` is the preferred model/provider default.
-- Traefik BasicAuth is optional and disabled by default for lab/upstream-auth environments.
+- `gpt-5.6-luna` + `codex` is the preferred model/provider default.
 - Browserless concurrency `1` is intentionally lab-friendly. Do not silently raise it in `install.sh`; warn/document instead.
 - Runtime UID/GID `10000:10000` matches current Agent/Dashboard image behavior and prevents WebUI PVC permission failures.
 
@@ -115,7 +113,6 @@ set -a
 set +a
 export WEBUI_HOST=hermes.example.com
 export DASHBOARD_HOST=hermes-admin.example.com
-export BASIC_AUTH_PASSWORD='Strong-Test-Password-1!'
 export DASHBOARD_AUTH_PASSWORD='Strong-Test-Password-2!'
 export API_SERVER_KEY='test-api-key'
 export BROWSER_TOKEN='test-browser-token'
@@ -160,15 +157,12 @@ Keep this restart behavior. It prevents Browserless token mismatch and stale das
 
 ## Authentication model
 
-There are three auth layers:
+There are two app auth layers:
 
-1. Optional Traefik Ingress BasicAuth.
-   - Controlled by `ENABLE_TRAEFIK_BASIC_AUTH=true|false`.
-   - Uses `secret/hermes-basic-auth-users` containing an htpasswd-style `users` file.
-2. Dashboard internal BasicAuth.
+1. Dashboard internal BasicAuth.
    - Always configured.
    - Uses `secret/hermes-dashboard-auth`.
-3. WebUI built-in password auth.
+2. WebUI built-in password auth.
    - Always configured by this installer.
    - `HERMES_WEBUI_PASSWORD` is read from `secret/hermes-dashboard-auth:password`.
    - Therefore WebUI password == `DASHBOARD_AUTH_PASSWORD`.
@@ -190,17 +184,14 @@ Do not reintroduce behavior where interactive rotation silently reuses password 
 Useful examples:
 
 ```bash
-# Dashboard + WebUI only, lab password allowed, hidden prompt
-./maintain.sh rotate-passwords --lab --only-dashboard --prompt
+# Dashboard + WebUI, lab password allowed, hidden prompt
+./maintain.sh rotate-passwords --lab --prompt
 
-# Optional Traefik BasicAuth only
-./maintain.sh rotate-passwords --only-ingress --prompt
-
-# Generate new random values for selected targets
-./maintain.sh rotate-passwords --generate --only-dashboard
+# Generate a new random value
+./maintain.sh rotate-passwords --generate
 
 # CI/env-driven mode, explicit only
-DASHBOARD_AUTH_PASSWORD='...' ./maintain.sh rotate-passwords --from-env --only-dashboard
+DASHBOARD_AUTH_PASSWORD='...' ./maintain.sh rotate-passwords --from-env
 ```
 
 Generated values go to `.rendered/rotated-credentials-*.txt` with mode `0600`; never commit or print them.
@@ -361,14 +352,13 @@ Redact tokens before sharing output.
 - Preserve Secret-backed env values; do not inline secrets.
 - Preserve `prepare-permissions`, `prepare-webui-state`, `copy-agent-source`, and `prepare-browser-cli` initContainer behavior unless you have tested a better replacement.
 - Preserve Browserless as internal ClusterIP only.
-- Preserve Traefik BasicAuth as optional; do not make it mandatory again.
 - Preserve Dashboard/WebUI shared password behavior unless upstream WebUI adds a better first-class bootstrap API.
 
 
 
 ## Persistent HOME and SSH
 
-The Agent deployment can set `HOME=/opt/data` and XDG dirs under `/opt/data` so CLI state and OpenSSH defaults persist on the `hermes-home` PVC. The init job prepares `/opt/data/.ssh` and generates an SSH keypair when `HERMES_SSH_SETUP=true` and the key is missing. Existing keys must be preserved; key generation is first-install/missing-only. Never commit private keys or real known_hosts/config data into public examples.
+The Agent, Dashboard, and WebUI deployments set `HOME=/opt/data` and XDG dirs under `/opt/data` so CLI state and OpenSSH defaults persist on the `hermes-home` PVC. The init job prepares `/opt/data/.ssh` and generates an SSH keypair when `HERMES_SSH_SETUP=true` and the key is missing. Existing keys must be preserved; key generation is first-install/missing-only. Never commit private keys or real known_hosts/config data into public examples.
 
 Validation points:
 
@@ -385,7 +375,7 @@ The installer supports opt-in Python addon packages without rebuilding the Agent
 - Addon Python is fixed to `HERMES_ADDON_PYTHON_MODE=uv`, `HERMES_UV_DIR=/opt/data/uv`, and `HERMES_ADDON_VENV=/opt/data/addon-venv`; keep those hard facts out of `hermes.env.example`.
 - `HERMES_ADDON_PYTHON_VERSION` defaults to `3.13` and is the only addon Python runtime knob exposed to operators.
 - `install.sh` packages the requirements file into `hermes-bootstrap-archive`; the init job installs uv, a uv-managed Python runtime, and the addon venv on the `/opt/data` PVC.
-- The Agent and WebUI container `PATH` values include `/opt/data/addon-venv/bin` and `/opt/data/uv/bin` so console scripts work from both containers without requiring system Python in WebUI.
+- The Agent, Dashboard, and WebUI container `PATH` values include `/opt/data/addon-venv/bin` and `/opt/data/uv/bin` so console scripts work from all three relevant containers without requiring system Python in WebUI.
 
 Do not install extra packages into `/opt/hermes/.venv` for this feature; keep addon packages isolated or build a custom `HERMES_AGENT_IMAGE` for production-standard dependencies.
 
@@ -394,7 +384,6 @@ Do not install extra packages into `/opt/hermes/.venv` for this feature; keep ad
 - Keep `set -euo pipefail`.
 - Do not pass plaintext passwords in command-line arguments where they appear in process lists.
 - Prefer temporary files with restrictive permissions for `kubectl create secret --from-file`.
-- Use `openssl passwd -apr1 -stdin` for htpasswd hashes.
 - Make scripts idempotent and safe to rerun.
 - Support non-interactive automation explicitly; do not guess user intent from stale environment values.
 

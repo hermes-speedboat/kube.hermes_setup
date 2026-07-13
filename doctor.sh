@@ -98,41 +98,48 @@ PY' >/dev/null 2>&1; then
   fi
 }
 
-check_agent_home_ssh() {
-  local pod home xdg_config xdg_cache ssh_setup ssh_generate key_path ssh_dir_mode key_mode pub_mode
-  pod="$(kubectl -n "$HERMES_NAMESPACE" get pods -l app=hermes-agent --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
-  [[ -n "$pod" ]] || { fail "no running hermes-agent pod for HOME/SSH check"; return; }
+check_home_ssh() {
+  local app pod home xdg_config xdg_cache ansible_config ssh_setup key_path ssh_dir_mode key_mode pub_mode
+  for app in hermes-agent hermes-dashboard hermes-webui; do
+    pod="$(kubectl -n "$HERMES_NAMESPACE" get pods -l app="$app" --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+    [[ -n "$pod" ]] || { fail "no running $app pod for HOME/SSH check"; continue; }
 
-  home="$(kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -lc 'printf %s "${HOME:-}"' 2>/dev/null || true)"
-  xdg_config="$(kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -lc 'printf %s "${XDG_CONFIG_HOME:-}"' 2>/dev/null || true)"
-  xdg_cache="$(kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -lc 'printf %s "${XDG_CACHE_HOME:-}"' 2>/dev/null || true)"
+    home="$(kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -c 'printf %s "${HOME:-}"' 2>/dev/null || true)"
+    xdg_config="$(kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -c 'printf %s "${XDG_CONFIG_HOME:-}"' 2>/dev/null || true)"
+    xdg_cache="$(kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -c 'printf %s "${XDG_CACHE_HOME:-}"' 2>/dev/null || true)"
+    ansible_config="$(kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -c 'printf %s "${ANSIBLE_CONFIG:-}"' 2>/dev/null || true)"
 
-  if [[ "${HERMES_HOME_AS_HOME:-true}" =~ ^(1|true|TRUE|yes|YES|on|ON)$ ]]; then
     if [[ "$home" == "/opt/data" && "$xdg_config" == "/opt/data/.config" && "$xdg_cache" == "/opt/data/.cache" ]]; then
-      ok "agent HOME/XDG point to persistent /opt/data"
+      ok "$app HOME/XDG point to persistent /opt/data"
     else
-      fail "agent HOME/XDG are not persistent (HOME=${home:-unset}, XDG_CONFIG_HOME=${xdg_config:-unset}, XDG_CACHE_HOME=${xdg_cache:-unset})"
+      fail "$app HOME/XDG are not persistent (HOME=${home:-unset}, XDG_CONFIG_HOME=${xdg_config:-unset}, XDG_CACHE_HOME=${xdg_cache:-unset})"
     fi
-  fi
 
-  ssh_setup="${HERMES_SSH_SETUP:-true}"
-  [[ "$ssh_setup" =~ ^(1|true|TRUE|yes|YES|on|ON)$ ]] || return 0
+    if [[ "$ansible_config" == "/workspace/ansible/ansible.cfg" ]]; then
+      ok "$app ANSIBLE_CONFIG points to workspace config"
+    else
+      fail "$app ANSIBLE_CONFIG invalid (${ansible_config:-unset})"
+    fi
 
-  ssh_dir_mode="$(kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -lc 'test -d /opt/data/.ssh && stat -c %a /opt/data/.ssh' 2>/dev/null || true)"
-  if [[ "$ssh_dir_mode" == "700" ]]; then
-    ok "persistent SSH directory /opt/data/.ssh mode 700"
-  else
-    fail "persistent SSH directory invalid or wrong mode (${ssh_dir_mode:-missing})"
-  fi
+    ssh_setup="${HERMES_SSH_SETUP:-true}"
+    [[ "$ssh_setup" =~ ^(1|true|TRUE|yes|YES|on|ON)$ ]] || continue
 
-  key_path="${HERMES_SSH_KEY_PATH:-/opt/data/.ssh/id_ed25519}"
-  key_mode="$(kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -lc 'p="$0"; test -s "$p" && stat -c %a "$p"' "$key_path" 2>/dev/null || true)"
-  pub_mode="$(kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -lc 'p="$0.pub"; test -s "$p" && stat -c %a "$p"' "$key_path" 2>/dev/null || true)"
-  if [[ "$key_mode" == "600" && "$pub_mode" == "644" ]]; then
-    ok "persistent SSH keypair exists with safe modes"
-  else
-    fail "persistent SSH keypair missing or wrong modes (private=${key_mode:-missing}, public=${pub_mode:-missing})"
-  fi
+    ssh_dir_mode="$(kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -c 'test -d /opt/data/.ssh && stat -c %a /opt/data/.ssh' 2>/dev/null || true)"
+    if [[ "$ssh_dir_mode" == "700" ]]; then
+      ok "$app persistent SSH directory /opt/data/.ssh mode 700"
+    else
+      fail "$app persistent SSH directory invalid or wrong mode (${ssh_dir_mode:-missing})"
+    fi
+
+    key_path="${HERMES_SSH_KEY_PATH:-/opt/data/.ssh/id_ed25519}"
+    key_mode="$(kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -c 'p="$0"; test -s "$p" && stat -c %a "$p"' "$key_path" 2>/dev/null || true)"
+    pub_mode="$(kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -c 'p="$0.pub"; test -s "$p" && stat -c %a "$p"' "$key_path" 2>/dev/null || true)"
+    if [[ "$key_mode" == "600" && "$pub_mode" == "644" ]]; then
+      ok "$app persistent SSH keypair exists with safe modes"
+    else
+      fail "$app persistent SSH keypair missing or wrong modes (private=${key_mode:-missing}, public=${pub_mode:-missing})"
+    fi
+  done
 }
 
 check_webui_agent_source() {
@@ -151,7 +158,7 @@ check_webui_agent_source() {
 check_addon_python_runtime() {
   [[ -n "${HERMES_ADDON_REQUIREMENTS:-}" ]] || return 0
   local app pod py_out ansible_out
-  for app in hermes-agent hermes-webui; do
+  for app in hermes-agent hermes-dashboard hermes-webui; do
     pod="$(kubectl -n "$HERMES_NAMESPACE" get pods -l app="$app" --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
     [[ -n "$pod" ]] || { fail "no running $app pod for addon Python check"; continue; }
     py_out="$(kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -c 'test -x /opt/data/uv/bin/uv && test -f /opt/data/addon-venv/.hermes-uv-managed && /opt/data/addon-venv/bin/python --version' 2>/dev/null || true)"
@@ -163,6 +170,14 @@ check_addon_python_runtime() {
     ansible_out="$(kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -c 'if [ -x /opt/data/addon-venv/bin/ansible ]; then /opt/data/addon-venv/bin/ansible --version | sed -n "1p"; fi' 2>/dev/null || true)"
     if [[ "$ansible_out" == ansible\ * ]]; then
       ok "$app addon Ansible available (${ansible_out})"
+    else
+      fail "$app addon Ansible missing or broken"
+      continue
+    fi
+    if kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -c '/opt/data/addon-venv/bin/ansible localhost -m ping -i /workspace/ansible/inventory/hosts.ini' >/dev/null 2>&1; then
+      ok "$app addon Ansible localhost ping"
+    else
+      fail "$app addon Ansible localhost ping failed"
     fi
   done
 }
@@ -227,7 +242,7 @@ main() {
   check_k8s
   check_rollouts
   check_internal_health
-  check_agent_home_ssh
+  check_home_ssh
   check_webui_agent_source
   check_addon_python_runtime
   check_dashboard_workspace_root

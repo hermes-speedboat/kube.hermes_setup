@@ -20,15 +20,14 @@ Usage:
   ./maintain.sh upgrade
   ./maintain.sh backup <backup.tgz>
   ./maintain.sh restore <backup.tgz>
-  ./maintain.sh rotate-passwords [--lab] [--prompt|--generate|--from-env] [--skip-ingress] [--skip-dashboard]
+  ./maintain.sh rotate-passwords [--lab] [--prompt|--generate|--from-env]
   ./maintain.sh rotate-browser-token
 
 Environment:
   ENV_FILE=./hermes.env
   HERMES_NAMESPACE=hermes
   HERMES_PASSWORD_POLICY=production|lab
-  BASIC_AUTH_USER/BASIC_AUTH_PASSWORD for optional Traefik Ingress BasicAuth
-  DASHBOARD_AUTH_USER/DASHBOARD_AUTH_PASSWORD for Dashboard internal BasicAuth
+  DASHBOARD_AUTH_USER/DASHBOARD_AUTH_PASSWORD for Dashboard/WebUI auth
 EOF
 }
 
@@ -198,24 +197,6 @@ confirm_weak_password_if_interactive() {
   fail "Weak $label rejected. Use a stronger value, or set HERMES_PASSWORD_POLICY=lab / HERMES_ALLOW_WEAK_PASSWORD=true for lab systems."
 }
 
-htpasswd_apr1() {
-  local pass="$1"
-  # stdin avoids exposing the plaintext password in the process list.
-  printf '%s\n' "$pass" | openssl passwd -apr1 -stdin
-}
-
-apply_basic_auth_secret() {
-  local user="$1" pass="$2" hash tmpdir
-  hash="$(htpasswd_apr1 "$pass")"
-  tmpdir="$(mktemp -d)"
-  chmod 700 "$tmpdir"
-  printf '%s:%s\n' "$user" "$hash" > "$tmpdir/users"
-  kubectl -n "$HERMES_NAMESPACE" create secret generic hermes-basic-auth-users \
-    --from-file=users="$tmpdir/users" \
-    --dry-run=client -o yaml | kubectl apply -f -
-  rm -rf "$tmpdir"
-}
-
 apply_dashboard_auth_secret() {
   local user="$1" pass="$2" tmpdir
   tmpdir="$(mktemp -d)"
@@ -230,32 +211,25 @@ apply_dashboard_auth_secret() {
 }
 
 rotate_passwords() {
-  local rotate_ingress=1 rotate_dashboard=1 input_mode="auto"
+  local input_mode="auto"
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --lab) export HERMES_PASSWORD_POLICY=lab ;;
       --generate) input_mode="generate" ;;
       --prompt) input_mode="prompt" ;;
       --from-env|--env) input_mode="env" ;;
-      --skip-ingress) rotate_ingress=0 ;;
-      --skip-dashboard) rotate_dashboard=0 ;;
-      --only-ingress) rotate_ingress=1; rotate_dashboard=0 ;;
-      --only-dashboard|--only-webui) rotate_ingress=0; rotate_dashboard=1 ;;
       --help|-h)
         cat <<'EOF'
 Usage:
-  ./maintain.sh rotate-passwords [--lab] [--prompt|--generate|--from-env] [--skip-ingress] [--skip-dashboard]
-  ./maintain.sh rotate-passwords --only-ingress [--prompt|--generate|--from-env]
-  ./maintain.sh rotate-passwords --only-dashboard [--prompt|--generate|--from-env]
+  ./maintain.sh rotate-passwords [--lab] [--prompt|--generate|--from-env]
 
 Passwords controlled:
-  Ingress BasicAuth: BASIC_AUTH_USER / BASIC_AUTH_PASSWORD
   Dashboard + WebUI: DASHBOARD_AUTH_USER / DASHBOARD_AUTH_PASSWORD
 
 Input modes:
   --prompt    Always ask with hidden interactive prompts. This is the default when stdin is a TTY.
-  --generate  Generate new random passwords for all selected targets and write them to .rendered/rotated-credentials-*.txt.
-  --from-env  Read selected passwords from environment variables. Use this for CI/non-interactive automation.
+  --generate  Generate a new random password and write it to .rendered/rotated-credentials-*.txt.
+  --from-env  Read DASHBOARD_AUTH_PASSWORD from environment variables. Use this for CI/non-interactive automation.
 
 Important:
   Values present in hermes.env are NOT silently reused in interactive mode. This prevents a "rotation" that applies the old password again.
@@ -268,10 +242,6 @@ EOF
     shift
   done
 
-  if [[ "$rotate_ingress" -eq 0 && "$rotate_dashboard" -eq 0 ]]; then
-    fail "nothing selected to rotate"
-  fi
-
   if [[ "$input_mode" == "auto" ]]; then
     if [[ -t 0 ]]; then
       input_mode="prompt"
@@ -280,9 +250,8 @@ EOF
     fi
   fi
 
-  local basic_user="${BASIC_AUTH_USER:-admin}"
   local dashboard_user="${DASHBOARD_AUTH_USER:-admin}"
-  local basic_pass="" dashboard_pass="" generated_file=""
+  local dashboard_pass="" generated_file=""
   if [[ "$input_mode" == "generate" ]]; then
     generated_file="$(credential_output_file)"
     umask 077
@@ -290,56 +259,31 @@ EOF
   fi
 
   case "$input_mode" in
-    prompt|generate|env) ;;
+    generate)
+      dashboard_pass="$(rand_hex 18)"
+      printf 'DASHBOARD_AUTH_USER=%s
+DASHBOARD_AUTH_PASSWORD=%s
+' "$dashboard_user" "$dashboard_pass" >> "$generated_file"
+      ;;
+    env)
+      dashboard_pass="$(secret_from_env DASHBOARD_AUTH_PASSWORD)"
+      ;;
+    prompt)
+      dashboard_pass="$(prompt_secret 'Dashboard/WebUI password')"
+      ;;
     *) fail "unsupported password input mode: $input_mode" ;;
   esac
 
-  if [[ "$rotate_ingress" -eq 1 ]]; then
-    case "$input_mode" in
-      generate)
-        basic_pass="$(rand_hex 18)"
-        printf 'BASIC_AUTH_USER=%s
-BASIC_AUTH_PASSWORD=%s
-' "$basic_user" "$basic_pass" >> "$generated_file"
-        ;;
-      env)
-        basic_pass="$(secret_from_env BASIC_AUTH_PASSWORD)"
-        ;;
-      prompt)
-        basic_pass="$(prompt_secret 'Ingress BasicAuth password')"
-        ;;
-    esac
-    confirm_weak_password_if_interactive "Ingress BasicAuth password" "$basic_pass"
-    apply_basic_auth_secret "$basic_user" "$basic_pass"
-  fi
-
-  if [[ "$rotate_dashboard" -eq 1 ]]; then
-    case "$input_mode" in
-      generate)
-        dashboard_pass="$(rand_hex 18)"
-        printf 'DASHBOARD_AUTH_USER=%s
-DASHBOARD_AUTH_PASSWORD=%s
-' "$dashboard_user" "$dashboard_pass" >> "$generated_file"
-        ;;
-      env)
-        dashboard_pass="$(secret_from_env DASHBOARD_AUTH_PASSWORD)"
-        ;;
-      prompt)
-        dashboard_pass="$(prompt_secret 'Dashboard/WebUI password')"
-        ;;
-    esac
-    confirm_weak_password_if_interactive "Dashboard/WebUI password" "$dashboard_pass"
-    apply_dashboard_auth_secret "$dashboard_user" "$dashboard_pass"
-    kubectl -n "$HERMES_NAMESPACE" rollout restart deploy/hermes-dashboard deploy/hermes-webui
-    kubectl -n "$HERMES_NAMESPACE" rollout status deploy/hermes-dashboard --timeout=300s
-    kubectl -n "$HERMES_NAMESPACE" rollout status deploy/hermes-webui --timeout=300s
-  fi
+  confirm_weak_password_if_interactive "Dashboard/WebUI password" "$dashboard_pass"
+  apply_dashboard_auth_secret "$dashboard_user" "$dashboard_pass"
+  kubectl -n "$HERMES_NAMESPACE" rollout restart deploy/hermes-dashboard deploy/hermes-webui
+  kubectl -n "$HERMES_NAMESPACE" rollout status deploy/hermes-dashboard --timeout=300s
+  kubectl -n "$HERMES_NAMESPACE" rollout status deploy/hermes-webui --timeout=300s
 
   cat <<EOF
-Rotated requested password secrets.
+Rotated Dashboard/WebUI password secret.
 Input mode:          $input_mode
-Ingress BasicAuth:   $([[ "$rotate_ingress" -eq 1 ]] && echo "updated for user '$basic_user'" || echo "skipped")
-Dashboard/WebUI:     $([[ "$rotate_dashboard" -eq 1 ]] && echo "updated for dashboard user '$dashboard_user'; WebUI password uses the same secret" || echo "skipped")
+Dashboard/WebUI:     updated for dashboard user '$dashboard_user'; WebUI password uses the same secret
 
 Plaintext passwords were not printed. Store env-provided/generated values in your password manager.
 For lab passwords use --lab or HERMES_PASSWORD_POLICY=lab explicitly.
