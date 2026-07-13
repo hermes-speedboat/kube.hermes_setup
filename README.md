@@ -200,7 +200,7 @@ Modes:
 
 ## Persistent HOME and SSH keypair
 
-The Agent container can use the persistent Hermes home PVC as its Unix home directory. By default the installer sets the Agent process environment to:
+The Agent, Dashboard, and WebUI containers can use the persistent Hermes home PVC as their Unix home directory. By default the installer sets their process environment to:
 
 ```text
 HOME=/opt/data
@@ -208,7 +208,7 @@ XDG_CONFIG_HOME=/opt/data/.config
 XDG_CACHE_HOME=/opt/data/.cache
 ```
 
-This makes normal CLI state and OpenSSH defaults land on the `hermes-home` PVC instead of the ephemeral container filesystem. Agent/WebUI containers also use a UTF-8 locale so Python addon CLIs such as Ansible can start reliably. The init job also prepares:
+This makes normal CLI state and OpenSSH defaults land on the `hermes-home` PVC instead of the ephemeral container filesystem. Agent/Dashboard/WebUI containers also use a UTF-8 locale so Python addon CLIs such as Ansible can start reliably. The init job also prepares:
 
 ```text
 /opt/data/.ssh/
@@ -245,7 +245,7 @@ Do not commit private keys into `bootstrap/` or the public repo. If you bootstra
 
 ## Persistent Python addon packages
 
-You can install additional Python CLI/tools without rebuilding the Agent image by pointing `HERMES_ADDON_REQUIREMENTS` at a local requirements file. The installer packages that file into the init Secret and the init job installs it into a uv-managed Python runtime and venv on the persistent `/opt/data` PVC. This makes the addon Python usable from both the Agent and WebUI containers, even when the WebUI image has no system Python.
+You can install additional Python CLI/tools without rebuilding the Agent image by pointing `HERMES_ADDON_REQUIREMENTS` at a local requirements file. The installer packages that file into the init Secret and the init job installs it into a uv-managed Python runtime and venv on the persistent `/opt/data` PVC. This makes the addon Python usable from the Agent, Dashboard, and WebUI containers, even when the WebUI image has no system Python.
 
 Hard-coded addon runtime paths:
 
@@ -273,10 +273,10 @@ EOF
 ENV_FILE=./hermes.env ./install.sh
 ```
 
-The Agent container PATH includes the addon venv after Hermes' own venv, and the WebUI container PATH includes it before its normal paths:
+The Agent and Dashboard container PATH includes the addon venv after Hermes' own venv, and the WebUI container PATH includes it before its normal paths:
 
 ```text
-# Agent
+# Agent/Dashboard
 /opt/hermes/bin:/opt/hermes/.venv/bin:/opt/data/addon-venv/bin:/opt/data/uv/bin:...
 
 # WebUI

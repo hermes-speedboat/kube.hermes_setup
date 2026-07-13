@@ -19,7 +19,7 @@ EOF
 ENV_FILE=./hermes.env ./install.sh
 ```
 
-The packages are installed into `/opt/data/addon-venv`, backed by a uv-managed Python runtime under `/opt/data/uv`. Both paths are PVC-backed and survive Pod recreation. Because the Python runtime is under `/opt/data`, the same Ansible CLI works from both `hermes-agent` and `hermes-webui` containers.
+The packages are installed into `/opt/data/addon-venv`, backed by a uv-managed Python runtime under `/opt/data/uv`. Both paths are PVC-backed and survive Pod recreation. Because the Python runtime is under `/opt/data`, the same Ansible CLI works from the `hermes-agent`, `hermes-dashboard`, and `hermes-webui` containers.
 
 The installer also ensures this Ansible project directory exists on the shared workspace PVC, even when no bootstrap directory is provided:
 
@@ -33,6 +33,7 @@ If `HERMES_BOOTSTRAP_DIR=./bootstrap` is set, the example Ansible files from `bo
 
 ```bash
 kubectl -n <namespace> exec deploy/hermes-agent -- ansible --version
+kubectl -n <namespace> exec deploy/hermes-dashboard -- ansible --version
 kubectl -n <namespace> exec deploy/hermes-webui -- ansible --version
 kubectl -n <namespace> exec deploy/hermes-webui -- python --version
 kubectl -n <namespace> exec deploy/hermes-agent -- sh -lc 'echo "$ANSIBLE_CONFIG"; ls -la /workspace/ansible'
@@ -50,7 +51,7 @@ or call `/opt/data/addon-venv/bin/ansible-playbook` explicitly.
 
 ## SSH and persistence
 
-The Agent HOME/SSH feature sets `HOME=/opt/data` and prepares `/opt/data/.ssh`. With `HERMES_SSH_SETUP=true`, the init job creates `/opt/data/.ssh/id_ed25519` only if it is missing. Install the public key on managed hosts:
+The persistent HOME/SSH feature sets `HOME=/opt/data` for the Agent, Dashboard, and WebUI containers and prepares `/opt/data/.ssh`. With `HERMES_SSH_SETUP=true`, the init job creates `/opt/data/.ssh/id_ed25519` only if it is missing. Install the public key on managed hosts:
 
 ```bash
 kubectl -n <namespace> exec deploy/hermes-agent -- cat /opt/data/.ssh/id_ed25519.pub
@@ -86,7 +87,7 @@ Important paths:
 /workspace/ansible/host_vars        # host variables
 ```
 
-The Agent and WebUI deployments set:
+The Agent, Dashboard, and WebUI deployments set:
 
 ```text
 ANSIBLE_CONFIG=/workspace/ansible/ansible.cfg

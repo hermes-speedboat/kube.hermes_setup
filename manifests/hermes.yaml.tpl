@@ -398,7 +398,7 @@ spec:
         args:
         - |
           set -eu
-          mkdir -p /opt/data /workspace
+          mkdir -p /opt/data /workspace/ansible/collections /workspace/ansible/group_vars /workspace/ansible/host_vars /workspace/ansible/inventory /workspace/ansible/playbooks /workspace/ansible/roles /opt/data/ansible/cp /opt/data/ansible/tmp
           chown -R ${HERMES_RUNTIME_UID}:${HERMES_RUNTIME_GID} /opt/data /workspace
           chmod 700 /opt/data
           [ ! -d /opt/data/.ssh ] || chmod 700 /opt/data/.ssh
@@ -422,6 +422,12 @@ spec:
         env:
         - name: HERMES_HOME
           value: /opt/data
+        - name: HOME
+          value: "${HERMES_CONTAINER_HOME}"
+        - name: XDG_CONFIG_HOME
+          value: "${HERMES_XDG_CONFIG_HOME}"
+        - name: XDG_CACHE_HOME
+          value: "${HERMES_XDG_CACHE_HOME}"
         - name: LANG
           value: C.UTF-8
         - name: LC_ALL
@@ -430,6 +436,22 @@ spec:
           value: /opt/data:/workspace
         - name: HERMES_DASHBOARD_FILES_ROOT
           value: /workspace
+        - name: HERMES_ADDON_PYTHON_MODE
+          value: "${HERMES_ADDON_PYTHON_MODE}"
+        - name: HERMES_UV_DIR
+          value: "${HERMES_UV_DIR}"
+        - name: HERMES_ADDON_VENV
+          value: "${HERMES_ADDON_VENV}"
+        - name: HERMES_ADDON_PYTHON_VERSION
+          value: "${HERMES_ADDON_PYTHON_VERSION}"
+        - name: UV_PYTHON_INSTALL_DIR
+          value: "${HERMES_UV_DIR}/python"
+        - name: UV_CACHE_DIR
+          value: /opt/data/.cache/uv
+        - name: ANSIBLE_CONFIG
+          value: /workspace/ansible/ansible.cfg
+        - name: PATH
+          value: /opt/hermes/bin:/opt/hermes/.venv/bin:${HERMES_ADDON_VENV}/bin:${HERMES_UV_DIR}/bin:/opt/data/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         - name: HERMES_DASHBOARD_BASIC_AUTH_USERNAME
           valueFrom:
             secretKeyRef:
