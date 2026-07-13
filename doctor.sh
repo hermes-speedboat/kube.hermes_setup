@@ -109,12 +109,10 @@ check_home_ssh() {
     xdg_cache="$(kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -c 'printf %s "${XDG_CACHE_HOME:-}"' 2>/dev/null || true)"
     ansible_config="$(kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -c 'printf %s "${ANSIBLE_CONFIG:-}"' 2>/dev/null || true)"
 
-    if [[ "${HERMES_HOME_AS_HOME:-true}" =~ ^(1|true|TRUE|yes|YES|on|ON)$ ]]; then
-      if [[ "$home" == "/opt/data" && "$xdg_config" == "/opt/data/.config" && "$xdg_cache" == "/opt/data/.cache" ]]; then
-        ok "$app HOME/XDG point to persistent /opt/data"
-      else
-        fail "$app HOME/XDG are not persistent (HOME=${home:-unset}, XDG_CONFIG_HOME=${xdg_config:-unset}, XDG_CACHE_HOME=${xdg_cache:-unset})"
-      fi
+    if [[ "$home" == "/opt/data" && "$xdg_config" == "/opt/data/.config" && "$xdg_cache" == "/opt/data/.cache" ]]; then
+      ok "$app HOME/XDG point to persistent /opt/data"
+    else
+      fail "$app HOME/XDG are not persistent (HOME=${home:-unset}, XDG_CONFIG_HOME=${xdg_config:-unset}, XDG_CACHE_HOME=${xdg_cache:-unset})"
     fi
 
     if [[ "$ansible_config" == "/workspace/ansible/ansible.cfg" ]]; then

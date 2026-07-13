@@ -103,33 +103,22 @@ Interactive rotation:
 ./maintain.sh rotate-passwords --prompt
 ```
 
-Dashboard + WebUI only, lab password allowed:
+Dashboard + WebUI, lab password allowed:
 
 ```bash
-./maintain.sh rotate-passwords --lab --skip-ingress --prompt
-# or
-./maintain.sh rotate-passwords --lab --only-dashboard --prompt
+./maintain.sh rotate-passwords --lab --prompt
 ```
 
-Generate new random values:
+Generate a new random value:
 
 ```bash
 ./maintain.sh rotate-passwords --generate
-./maintain.sh rotate-passwords --generate --only-dashboard
-./maintain.sh rotate-passwords --generate --only-ingress
 ```
 
 Environment-driven rotation:
 
 ```bash
-BASIC_AUTH_USER=admin BASIC_AUTH_PASSWORD='use-a-long-random-value' DASHBOARD_AUTH_USER=admin DASHBOARD_AUTH_PASSWORD='use-another-long-random-value' ./maintain.sh rotate-passwords --from-env
-```
-
-Rotate only one layer:
-
-```bash
-./maintain.sh rotate-passwords --skip-ingress --prompt      # dashboard + WebUI only
-./maintain.sh rotate-passwords --skip-dashboard --prompt    # Traefik BasicAuth only
+DASHBOARD_AUTH_USER=admin DASHBOARD_AUTH_PASSWORD='use-a-long-random-value' ./maintain.sh rotate-passwords --from-env
 ```
 
 Production policy rejects weak passwords by default. Use `--lab`, `HERMES_PASSWORD_POLICY=lab`, or `HERMES_ALLOW_WEAK_PASSWORD=true` only for lab systems.
@@ -165,8 +154,7 @@ Repo defaults are lab-friendly:
 ```bash
 BROWSER_CONCURRENT=1
 BROWSER_QUEUED=10
-MODEL_NAME=gpt-5.5
-ENABLE_TRAEFIK_BASIC_AUTH=false
+MODEL_NAME=gpt-5.6-luna
 ```
 
 For heavier WebUI screenshot/browser workflows, increase `BROWSER_CONCURRENT` if Browserless queueing causes `CDP call timed out ... opening handshake`.
@@ -232,7 +220,7 @@ ENV_FILE=./hermes.env ./install.sh
 Operational properties:
 
 - Persistent: the uv runtime and addon venv live on the `/opt/data` PVC and survive Pod recreation.
-- Cross-container: the same Python, `ansible`, and other addon CLIs are usable from both `hermes-agent` and `hermes-webui` even if the WebUI image has no system Python.
+- Cross-container: the same Python, `ansible`, and other addon CLIs are usable from `hermes-agent`, `hermes-dashboard`, and `hermes-webui` even if the WebUI image has no system Python.
 - Re-runnable: changing the requirements file and rerunning `install.sh` updates the venv.
 - Isolated: Hermes' own `/opt/hermes/.venv` remains first in the Agent `PATH`; do not install ad-hoc packages there.
 - Migrating: if an older non-uv addon venv exists, the init job replaces it with a uv-managed venv.
@@ -257,10 +245,9 @@ export PATH=/opt/data/addon-venv/bin:/opt/data/uv/bin:$PATH
 
 ## Persistent HOME and SSH
 
-The Agent deployment supports a persistent Unix home and SSH directory on the `hermes-home` PVC:
+The Agent, Dashboard, and WebUI deployments use a persistent Unix home and SSH directory on the `hermes-home` PVC:
 
 ```bash
-HERMES_HOME_AS_HOME=true
 HERMES_SSH_SETUP=true
 HERMES_SSH_KEY_TYPE=ed25519
 HERMES_SSH_KEY_PATH=/opt/data/.ssh/id_ed25519
@@ -268,7 +255,7 @@ HERMES_SSH_KEY_PATH=/opt/data/.ssh/id_ed25519
 
 Operational behavior:
 
-- `HOME=/opt/data`, `XDG_CONFIG_HOME=/opt/data/.config`, and `XDG_CACHE_HOME=/opt/data/.cache` are set on the Agent process.
+- `HOME=/opt/data`, `XDG_CONFIG_HOME=/opt/data/.config`, and `XDG_CACHE_HOME=/opt/data/.cache` are set on Agent, Dashboard, and WebUI processes.
 - `/opt/data/.ssh` is created with mode `700`; `known_hosts` is created with mode `644`.
 - If `HERMES_SSH_SETUP=true`, the init job generates the key only when `HERMES_SSH_KEY_PATH` does not already exist. Existing keys are preserved.
 - Private keys are forced to mode `600`; public keys are forced to mode `644`.

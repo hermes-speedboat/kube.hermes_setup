@@ -17,9 +17,6 @@ Internet
   v
 Ingress Controller / TLS
   |
-  +-- optional Traefik BasicAuth middleware
-  |     secret/hermes-basic-auth-users (htpasswd users file)
-  |
   |-- WEBUI_HOST      -> hermes-webui:8787
   |-- DASHBOARD_HOST  -> hermes-dashboard:9119
 
@@ -56,7 +53,6 @@ On the admin workstation:
 - `bash`
 - Kubernetes context with permissions to create namespace-scoped resources
 - Ingress controller compatible with standard Kubernetes Ingress
-- Traefik CRDs if `ENABLE_TRAEFIK_BASIC_AUTH=true`
 
 Optional but recommended:
 
@@ -95,14 +91,11 @@ Important variables:
 | `WEBUI_HOST` | Public WebUI FQDN |
 | `DASHBOARD_HOST` | Public dashboard FQDN |
 | `TLS_SECRET_NAME` | Optional TLS secret name if your Ingress uses one |
-| `ENABLE_TRAEFIK_BASIC_AUTH` | Enable optional outer Traefik BasicAuth middleware, default `false` |
-| `BASIC_AUTH_USER` | Outer Ingress BasicAuth username when Traefik BasicAuth is enabled |
-| `BASIC_AUTH_PASSWORD` | Outer Ingress BasicAuth password when Traefik BasicAuth is enabled |
 | `DASHBOARD_AUTH_USER` | Dashboard internal BasicAuth username |
 | `DASHBOARD_AUTH_PASSWORD` | Dashboard internal BasicAuth password; also used as WebUI password via `HERMES_WEBUI_PASSWORD` |
 | `HERMES_PASSWORD_POLICY` | `production` or `lab` for `maintain.sh rotate-passwords` |
 | `MODEL_PROVIDER` | Initial Hermes provider, default `codex` |
-| `MODEL_NAME` | Initial model, default `gpt-5.5` |
+| `MODEL_NAME` | Initial model, default `gpt-5.6-luna` |
 | `HERMES_AGENT_IMAGE` | Agent image |
 | `HERMES_WEBUI_IMAGE` | WebUI image |
 | `HERMES_BROWSER_IMAGE` | Browserless image |
@@ -114,7 +107,6 @@ Important variables:
 | `HERMES_BOOTSTRAP_MODE` | `disabled`, `missing` (default), or `overwrite` |
 | `HERMES_ADDON_REQUIREMENTS` | Optional local `requirements.txt` installed into a persistent addon venv |
 | `HERMES_ADDON_PYTHON_VERSION` | Optional uv-managed addon Python version, default `3.13` |
-| `HERMES_HOME_AS_HOME` | Set Agent `HOME=/opt/data` and XDG dirs to persistent PVC paths, default `true` |
 | `HERMES_SSH_SETUP` | Prepare `/opt/data/.ssh` with safe permissions, default `true` |
 | `HERMES_SSH_KEY_PATH` | SSH private key path under `/opt/data/.ssh`, default `/opt/data/.ssh/id_ed25519` |
 
@@ -122,17 +114,12 @@ Secrets may be generated automatically by `install.sh` when variables are omitte
 
 ### Authentication layers
 
-There are three independent authentication layers:
+There are two application authentication layers:
 
-1. **Optional Traefik Ingress BasicAuth** in front of WebUI and Dashboard.
-   - Controlled by `ENABLE_TRAEFIK_BASIC_AUTH=true|false`.
-   - Implemented as a Traefik `Middleware` plus an `htpasswd`-style Kubernetes Secret.
-   - Recommended for public Internet exposure.
-   - Often disabled in trusted labs, VPN-only environments, or when another upstream auth proxy already protects the Ingress.
-2. **Dashboard internal BasicAuth** inside Hermes Dashboard.
+1. **Dashboard internal BasicAuth** inside Hermes Dashboard.
    - Always configured by this installer.
    - Uses `DASHBOARD_AUTH_USER` / `DASHBOARD_AUTH_PASSWORD`.
-3. **WebUI built-in password auth** inside Hermes WebUI.
+2. **WebUI built-in password auth** inside Hermes WebUI.
    - Always configured by this installer.
    - Uses the same password Secret as Dashboard: `HERMES_WEBUI_PASSWORD` is read from `secret/hermes-dashboard-auth:password`.
    - This avoids the remote first-password setup gate without setting `HERMES_WEBUI_ONBOARDING_OPEN=1`.
@@ -140,20 +127,20 @@ There are three independent authentication layers:
 Password rotation has explicit input modes. Interactive runs prompt by default and do **not** silently reuse password values from `hermes.env`:
 
 ```bash
-# Ask for all selected passwords interactively; production policy by default
+# Ask for the Dashboard/WebUI password interactively; production policy by default
 ./maintain.sh rotate-passwords --prompt
 
-# Dashboard + WebUI only, lab password allowed, hidden prompt
-./maintain.sh rotate-passwords --lab --skip-ingress --prompt
+# Dashboard + WebUI, lab password allowed, hidden prompt
+./maintain.sh rotate-passwords --lab --prompt
 
-# Generate random values for selected targets and write them to .rendered/rotated-credentials-*.txt
+# Generate a random value and write it to .rendered/rotated-credentials-*.txt
 ./maintain.sh rotate-passwords --generate
 
 # Non-interactive / CI: explicitly read from environment variables
-BASIC_AUTH_PASSWORD='***' DASHBOARD_AUTH_PASSWORD='***' ./maintain.sh rotate-passwords --from-env
+DASHBOARD_AUTH_PASSWORD='***' ./maintain.sh rotate-passwords --from-env
 ```
 
-Use `--only-ingress`, `--only-dashboard`, `--skip-ingress`, and `--skip-dashboard` to choose exactly which passwords are changed. Production mode rejects weak passwords by default. Lab mode is explicit because accidental weak public credentials are how horror stories begin.
+Production mode rejects weak passwords by default. Lab mode is explicit because accidental weak public credentials are how horror stories begin.
 
 
 ## Bootstrap existing configuration
@@ -218,7 +205,6 @@ This makes normal CLI state and OpenSSH defaults land on the `hermes-home` PVC i
 with safe permissions. When `HERMES_SSH_SETUP=true`, the init job creates the SSH keypair only if `HERMES_SSH_KEY_PATH` is missing. Existing keys are preserved; private keys are never copied from examples or the public repo.
 
 ```bash
-HERMES_HOME_AS_HOME=true
 HERMES_SSH_SETUP=true
 HERMES_SSH_KEY_TYPE=ed25519
 HERMES_SSH_KEY_PATH=/opt/data/.ssh/id_ed25519
@@ -351,7 +337,7 @@ $EDITOR hermes.env
 ./maintain.sh backup ./backups/hermes-$(date -u +%Y%m%dT%H%M%SZ).tgz
 ./maintain.sh restore ./backups/hermes-YYYYmmddTHHMMSSZ.tgz
 ./maintain.sh upgrade
-./maintain.sh rotate-passwords [--lab] [--prompt|--generate|--from-env] [--skip-ingress] [--skip-dashboard]
+./maintain.sh rotate-passwords [--lab] [--prompt|--generate|--from-env]
 ./maintain.sh rotate-browser-token
 ./maintain.sh restart
 ```
@@ -400,8 +386,7 @@ Back up `/opt/data` to preserve Codex auth across destructive rebuilds.
 - Do not put real `BROWSER_CDP_URL` values into `config.yaml`; it contains a token.
 - Browserless has no public Ingress.
 - Browserless access is token-protected and NetworkPolicy-restricted.
-- Traefik Ingress BasicAuth is optional (`ENABLE_TRAEFIK_BASIC_AUTH`) but strongly recommended if the cluster is public.
-- Dashboard has its own internal BasicAuth in addition to optional Ingress BasicAuth.
+- Dashboard has its own internal BasicAuth.
 
 ## License
 
@@ -424,7 +409,7 @@ The installer prepares this by copying `node` from the Agent image into `/opt/da
 
 ## Browserless concurrency
 
-Repo defaults are intentionally lab-friendly: `BROWSER_CONCURRENT=1`, `BROWSER_QUEUED=10`, `MODEL_NAME=gpt-5.5`, and `ENABLE_TRAEFIK_BASIC_AUTH=false`. For heavier WebUI screenshot/browser workflows, raise `BROWSER_CONCURRENT` if Browserless queueing causes `CDP call timed out during opening handshake`.
+Repo defaults are intentionally lab-friendly: `BROWSER_CONCURRENT=1`, `BROWSER_QUEUED=10`, and `MODEL_NAME=gpt-5.6-luna`. For heavier WebUI screenshot/browser workflows, raise `BROWSER_CONCURRENT` if Browserless queueing causes `CDP call timed out during opening handshake`.
 
 
 ## WebUI upload size

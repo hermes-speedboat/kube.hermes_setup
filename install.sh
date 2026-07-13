@@ -18,7 +18,6 @@ write_generated_credentials() {
   chmod 700 "$RENDER_DIR"
   local out="$RENDER_DIR/generated-credentials.txt"
   {
-    printf "BASIC_AUTH_USER=%s\nBASIC_AUTH_PASSWORD=%s\n" "$BASIC_AUTH_USER" "$BASIC_AUTH_PASSWORD"
     printf "DASHBOARD_AUTH_USER=%s\nDASHBOARD_AUTH_PASSWORD=%s\n" "$DASHBOARD_AUTH_USER" "$DASHBOARD_AUTH_PASSWORD"
     printf "API_SERVER_KEY=%s\n" "$API_SERVER_KEY"
     printf "BROWSER_TOKEN=%s\n" "$BROWSER_TOKEN"
@@ -49,7 +48,6 @@ validate() {
 prepare_defaults() {
   export HERMES_NAMESPACE="${HERMES_NAMESPACE:-hermes}"
   export INGRESS_CLASS_NAME="${INGRESS_CLASS_NAME:-traefik}"
-  export ENABLE_TRAEFIK_BASIC_AUTH="${ENABLE_TRAEFIK_BASIC_AUTH:-${ENABLE_TRAEFIK_MIDDLEWARE:-false}}"
   export TRAEFIK_ENTRYPOINT="${TRAEFIK_ENTRYPOINT:-websecure}"
   export TLS_ENABLED="${TLS_ENABLED:-true}"
   export TLS_SECRET_NAME="${TLS_SECRET_NAME:-}"
@@ -70,7 +68,6 @@ prepare_defaults() {
   export HERMES_UV_DIR="/opt/data/uv"
   export HERMES_ADDON_VENV="/opt/data/addon-venv"
   export HERMES_ADDON_PYTHON_VERSION="${HERMES_ADDON_PYTHON_VERSION:-3.13}"
-  export HERMES_HOME_AS_HOME="${HERMES_HOME_AS_HOME:-true}"
   export HERMES_SSH_SETUP="${HERMES_SSH_SETUP:-true}"
   export HERMES_SSH_GENERATE_KEY="${HERMES_SSH_GENERATE_KEY:-${HERMES_SSH_SETUP}}"
   export HERMES_SSH_KEY_TYPE="${HERMES_SSH_KEY_TYPE:-ed25519}"
@@ -93,9 +90,7 @@ prepare_defaults() {
   export HERMES_BROWSER_MEMORY_LIMIT="${HERMES_BROWSER_MEMORY_LIMIT:-1Gi}"
   export STORAGE_CLASS_NAME="${STORAGE_CLASS_NAME:-}"
   export MODEL_PROVIDER="${MODEL_PROVIDER:-codex}"
-  export MODEL_NAME="${MODEL_NAME:-gpt-5.5}"
-  export BASIC_AUTH_USER="${BASIC_AUTH_USER:-admin}"
-  export BASIC_AUTH_PASSWORD="${BASIC_AUTH_PASSWORD:-$(rand_hex 18)}"
+  export MODEL_NAME="${MODEL_NAME:-gpt-5.6-luna}"
   export DASHBOARD_AUTH_USER="${DASHBOARD_AUTH_USER:-admin}"
   export DASHBOARD_AUTH_PASSWORD="${DASHBOARD_AUTH_PASSWORD:-$(rand_hex 18)}"
   export API_SERVER_KEY="${API_SERVER_KEY:-$(rand_hex 32)}"
@@ -129,20 +124,10 @@ prepare_defaults() {
   [[ "$HERMES_UV_DIR" = /opt/data/* ]] || fail "HERMES_UV_DIR must be under /opt/data for PVC persistence"
   [[ "$HERMES_ADDON_VENV" = /opt/data/* ]] || fail "HERMES_ADDON_VENV must be under /opt/data for PVC persistence"
   [[ "$HERMES_ADDON_PYTHON_VERSION" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]] || fail "HERMES_ADDON_PYTHON_VERSION must look like 3.13 or 3.13.5"
-  case "$HERMES_HOME_AS_HOME" in true|false|TRUE|FALSE|1|0|yes|no|YES|NO|on|off|ON|OFF) ;; *) fail "HERMES_HOME_AS_HOME must be boolean" ;; esac
   case "$HERMES_SSH_SETUP" in true|false|TRUE|FALSE|1|0|yes|no|YES|NO|on|off|ON|OFF) ;; *) fail "HERMES_SSH_SETUP must be boolean" ;; esac
   case "$HERMES_SSH_GENERATE_KEY" in true|false|TRUE|FALSE|1|0|yes|no|YES|NO|on|off|ON|OFF) ;; *) fail "HERMES_SSH_GENERATE_KEY must be boolean" ;; esac
   case "$HERMES_SSH_KEY_TYPE" in ed25519|rsa|ecdsa) ;; *) fail "HERMES_SSH_KEY_TYPE must be one of: ed25519, rsa, ecdsa" ;; esac
   [[ "$HERMES_SSH_KEY_PATH" = /opt/data/.ssh/* ]] || fail "HERMES_SSH_KEY_PATH must be under /opt/data/.ssh for PVC persistence"
-  if [[ "$HERMES_HOME_AS_HOME" =~ ^(1|true|TRUE|yes|YES|on|ON)$ ]]; then
-    export HERMES_CONTAINER_HOME="/opt/data"
-    export HERMES_XDG_CONFIG_HOME="/opt/data/.config"
-    export HERMES_XDG_CACHE_HOME="/opt/data/.cache"
-  else
-    export HERMES_CONTAINER_HOME="/root"
-    export HERMES_XDG_CONFIG_HOME="/root/.config"
-    export HERMES_XDG_CACHE_HOME="/root/.cache"
-  fi
   [[ "$HERMES_RUNTIME_UID" =~ ^[0-9]+$ ]] || fail "HERMES_RUNTIME_UID must be numeric"
   [[ "$HERMES_RUNTIME_GID" =~ ^[0-9]+$ ]] || fail "HERMES_RUNTIME_GID must be numeric"
   [[ "$HERMES_WEBUI_MAX_UPLOAD_MB" =~ ^[0-9]+$ ]] || fail "HERMES_WEBUI_MAX_UPLOAD_MB must be numeric"
@@ -231,20 +216,6 @@ create_namespace_and_secrets() {
     kubectl -n "$HERMES_NAMESPACE" delete secret hermes-bootstrap-archive --ignore-not-found=true >/dev/null
   fi
 
-  if [[ "$ENABLE_TRAEFIK_BASIC_AUTH" =~ ^(1|true|TRUE|yes|YES|on|ON)$ ]]; then
-    local basic_hash tmpdir
-    basic_hash="$(printf '%s\n' "$BASIC_AUTH_PASSWORD" | openssl passwd -apr1 -stdin)"
-    tmpdir="$(mktemp -d)"
-    chmod 700 "$tmpdir"
-      printf '%s:%s\n' "$BASIC_AUTH_USER" "$basic_hash" > "$tmpdir/users"
-    kubectl -n "$HERMES_NAMESPACE" create secret generic hermes-basic-auth-users \
-      --from-file=users="$tmpdir/users" \
-      --dry-run=client -o yaml | kubectl apply -f -
-    rm -rf "$tmpdir"
-  else
-    warn "Traefik Ingress BasicAuth is disabled. Dashboard internal auth remains enabled."
-  fi
-
   local dash_tmpdir
   dash_tmpdir="$(mktemp -d)"
   chmod 700 "$dash_tmpdir"
@@ -309,7 +280,6 @@ Namespace:        $HERMES_NAMESPACE
 WebUI host:       $WEBUI_HOST
 Dashboard host:   $DASHBOARD_HOST
 Browser CDP:      ws://hermes-browser:3000/chromium?token=<redacted>
-Ingress BasicAuth: ${ENABLE_TRAEFIK_BASIC_AUTH}
 Rendered file:    $MANIFEST_OUT
 
 Generated/used credentials were applied as Kubernetes Secrets only.

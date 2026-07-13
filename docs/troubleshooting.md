@@ -170,7 +170,7 @@ That means the WebUI password is the same as `DASHBOARD_AUTH_PASSWORD`. If the v
 Current behavior: interactive runs should prompt by default. To be explicit, use:
 
 ```bash
-./maintain.sh rotate-passwords --lab --skip-ingress --prompt
+./maintain.sh rotate-passwords --lab --prompt
 ```
 
 If you want to apply values from environment variables or `hermes.env`, use:
