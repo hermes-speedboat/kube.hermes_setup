@@ -133,13 +133,12 @@ CDP call timed out after 10.0s: timed out during opening handshake
 If Browserless `/pressure` shows `running` equal to `maxConcurrent` and `queued > 0`, Browserless is saturated. The repo default is intentionally small for lab use:
 
 ```bash
-BROWSER_CONCURRENT=1
+BROWSER_CONCURRENT=4
 BROWSER_QUEUED=10
+BROWSER_TIMEOUT_MS=30000
 ```
 
-With `BROWSER_CONCURRENT=1`, an active `browser_navigate()` health test can deadlock itself because Hermes/agent-browser may open more than one CDP WebSocket for a single navigation. `doctor.sh` therefore treats `maxConcurrent < 2` as a lab-constrained configuration and skips the active navigation check with a warning instead of failing/hanging.
-
-For full-page WebUI screenshot workflows, raise `BROWSER_CONCURRENT` when needed, then rerun `./install.sh`. The installer restarts Agent, Dashboard, WebUI, and Browserless so refreshed Secret/env values take effect.
+With `BROWSER_CONCURRENT=4`, four Browserless sessions can run in parallel. `BROWSER_TIMEOUT_MS=30000` limits an individual Browserless session to 30 seconds. If Browserless pressure shows sustained queueing, increase concurrency or reduce parallel browser workload before increasing the queue.
 
 
 ## WebUI: `First password setup is only available from local networks`
