@@ -152,12 +152,13 @@ WebUI chat sessions execute Hermes tools inside the WebUI container. The install
 Repo defaults are lab-friendly:
 
 ```bash
-BROWSER_CONCURRENT=1
+BROWSER_CONCURRENT=4
 BROWSER_QUEUED=10
+BROWSER_TIMEOUT_MS=30000
 MODEL_NAME=gpt-5.6-luna
 ```
 
-For heavier WebUI screenshot/browser workflows, increase `BROWSER_CONCURRENT` if Browserless queueing causes `CDP call timed out ... opening handshake`.
+With `BROWSER_CONCURRENT=4`, `doctor.sh` can perform active CDP checks while leaving capacity for parallel browser sessions. `BROWSER_QUEUED=10` bounds waiting sessions, and `BROWSER_TIMEOUT_MS=30000` limits one Browserless session to 30 seconds. For screenshot-heavy workflows, increase the concurrency deliberately if Browserless pressure shows sustained queueing.
 
 
 ## WebUI password uses the Dashboard password secret
@@ -173,7 +174,7 @@ So the WebUI login password is the same value as `DASHBOARD_AUTH_PASSWORD`. This
 
 ## Doctor and Browserless concurrency
 
-With `BROWSER_CONCURRENT=1`, `doctor.sh` skips active CDP navigation and only reports Browserless pressure. A single Hermes browser navigation can open multiple CDP WebSockets, so an active health-test navigation can queue behind itself at concurrency 1. Increase `BROWSER_CONCURRENT` for screenshot-heavy testing or production-like browser workflows.
+With `BROWSER_CONCURRENT=4`, `doctor.sh` can perform active CDP checks while leaving capacity for parallel browser sessions. A single Hermes browser navigation may open multiple CDP WebSockets, so lower concurrency can queue behind itself. `BROWSER_QUEUED=10` bounds waiting sessions, and `BROWSER_TIMEOUT_MS=30000` limits one Browserless session to 30 seconds.
 
 
 ## WebUI upload size
