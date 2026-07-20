@@ -163,6 +163,7 @@ bootstrap/
 ├── skills/<name>/SKILL.md        -> /opt/data/skills/<name>/SKILL.md
 │   ├── github-setup-access/      # Low-privilege public GitHub PR access
 │   ├── hermes-ansible-workspace/ # Ansible workspace and cleanup conventions
+│   ├── hermes-workspace-git/     # Git repository placement and archival rules
 │   └── markdown-pdf/             # Reproducible Markdown-to-PDF workflow
 ├── plugins/                      -> /opt/data/plugins/
 ├── cron/                         -> /opt/data/cron/
