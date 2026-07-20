@@ -8,6 +8,7 @@ All notable changes to this project are documented in this file.
 
 ### Fixed
 
+- Makes the Markdown PDF skill honor `--no-cover` when using the default `fpdf2` backend and corrects its no-cover usage example.
 - Neutralizes the reusable team-policy post-setup recipe by replacing repository-specific organization values with explicit `ASK_USER_AND_CHANGE` markers.
 - Requires Hermes to resolve every organization marker with the requesting user before installing the adapted policy.
 
