@@ -8,7 +8,7 @@ platforms: [linux]
 metadata:
   hermes:
     tags: [ansible, workspace, ssh, cleanup, collaboration]
-    related_skills: []
+    related_skills: [hermes-workspace-git]
 ---
 
 # Hermes Ansible Workspace
@@ -35,7 +35,7 @@ Use this skill for:
 - Pull requests or completed tasks involving files under `ansible/`
 - Cleanup or archival of completed Ansible work
 
-Do not use it to move unrelated workspace content into `ansible/`, or to archive active/shared automation without explicit user agreement.
+Do not use it to move unrelated workspace content into `ansible/`, or to archive active/shared automation without explicit user agreement. A repository contribution that merely packages or documents this skill is not itself Ansible automation: keep every non-Ansible-native Git checkout under `<workspace>/git/<repository-name>/` and archive it under `<workspace>/git_archive/<repository-name>/` according to `hermes-workspace-git`. Classify by the repository's primary purpose, not by the current task or one Ansible-related file.
 
 ## 1. Inspect Before Working
 
