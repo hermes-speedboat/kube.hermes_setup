@@ -40,6 +40,7 @@ Rationale:
 
 ```text
 README.md                         User-facing overview and quick start
+VERSION                           Current release version
 LICENCE                           MIT license
 install.sh                        Render/apply installer, secret creation, rollout waits
 maintain.sh                       Status, backup/restore, restart, password/token rotation

@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [v2.0.0] - 2026-07-20
+
+### Added
+
+- Adds `VERSION` as the release-version source of truth.
+- Adds bootstrap skills for general Git workspace lifecycle, Ansible-native workspace lifecycle, and least-privilege public GitHub pull-request access.
+- Adds concise post-setup recipes for activating bootstrap skills and adapting a mandatory Hermes team policy.
+- Adds contributor and inspiration acknowledgements, including Nicolas Eberle's structured operational use cases and reusable Hermes policy-skill work.
+
+### Changed
+
+- Renames the Ansible workspace skill to `hermes-workspace-ansible` for consistent workspace-skill naming.
+- Raises every bundled bootstrap skill version to `2.0.0` for the v2 release line.
+- Sets Browserless concurrency to four with a 30-second session timeout and persists/verifies CDP configuration across Hermes components.
+
 ## [v1.2.2] - 2026-07-13
 
 ### Added
