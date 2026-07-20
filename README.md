@@ -161,6 +161,7 @@ bootstrap/
 ├── memories/USER.md              -> /opt/data/memories/USER.md
 ├── memories/MEMORY.md            -> /opt/data/memories/MEMORY.md
 ├── skills/<name>/SKILL.md        -> /opt/data/skills/<name>/SKILL.md
+│   ├── github-setup-access/      # Low-privilege public GitHub PR access
 │   ├── hermes-ansible-workspace/ # Ansible workspace and cleanup conventions
 │   └── markdown-pdf/             # Reproducible Markdown-to-PDF workflow
 ├── plugins/                      -> /opt/data/plugins/
