@@ -440,11 +440,8 @@ The Dashboard `/files` view needs `HERMES_DASHBOARD_FILES_ROOT=/workspace`. This
 - **[Chris Rüttimann (`joe-speedboat`)](https://github.com/joe-speedboat)** — project maintainer and the human commit contributor represented in this repository's Git history. Historical commits also contain spelling and email variants of the same contributor identity.
 - **[Nicolas Eberle (`archham`)](https://github.com/archham)** — honored for ideas, structured operational use cases, inspiration, and reusable skills. In particular, [Hermes Team Policy Template](https://github.com/Tuxmint-Open-Source/hermes-team-policy-template) informed the team-policy adoption recipe, while [MISP Docker Lifecycle Manager](https://github.com/Tuxmint-Open-Source/misp-docker-lifecycle-manager) demonstrates the structured, safety-focused lifecycle approach that inspired this project's operational organization.
 
-### Automation identities
+### Automation identity
 
-The repository history also records work produced through these disclosed automation identities:
+The repository history also records work produced through [`hermes-speedboat`](https://github.com/hermes-speedboat), including commits authored as **Hermes Bitbull**.
 
-- [`hermes-speedboat`](https://github.com/hermes-speedboat), including commits authored as **Hermes Bitbull**;
-- [`hermes-agent`](https://github.com/hermes-agent), authored as **Hermes Agent**.
-
-These acknowledgements distinguish direct commit authorship from external inspiration while recognizing every human and automation identity represented in, or materially credited by, this project.
+These acknowledgements distinguish direct commit authorship from external inspiration.
