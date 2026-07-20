@@ -1,5 +1,7 @@
 # kube.hermes_setup
 
+Current release: **v2.0.0** (see [`VERSION`](VERSION) and [`CHANGELOG.md`](CHANGELOG.md)).
+
 Production-oriented Kubernetes/K3s installer for a multi-container Hermes Agent stack:
 
 - **[Hermes Agent Gateway](https://github.com/nousresearch/hermes-agent)** (`nousresearch/hermes-agent`) — API/gateway runtime
@@ -304,6 +306,7 @@ For a persistent Ansible control-node pattern, including mount locations and vis
 ```text
 .
 ├── README.md
+├── VERSION
 ├── LICENCE
 ├── install.sh                  # setup/install/upgrade apply
 ├── maintain.sh                 # backup, restore, upgrade, password rotation
@@ -429,3 +432,16 @@ The manifest resource requests/limits are configurable through `HERMES_*_CPU_REQ
 ### Dashboard workspace file browser
 
 The Dashboard `/files` view needs `HERMES_DASHBOARD_FILES_ROOT=/workspace`. This installer also sets `HERMES_WRITE_SAFE_ROOT=/opt/data:/workspace` in Agent, Dashboard, and WebUI so file tools can safely use both PVCs.
+
+## Acknowledgements and contributors
+
+### People
+
+- **[Chris Rüttimann (`joe-speedboat`)](https://github.com/joe-speedboat)** — project maintainer and the human commit contributor represented in this repository's Git history. Historical commits also contain spelling and email variants of the same contributor identity.
+- **[Nicolas Eberle (`archham`)](https://github.com/archham)** — honored for ideas, structured operational use cases, inspiration, and reusable skills. In particular, [Hermes Team Policy Template](https://github.com/Tuxmint-Open-Source/hermes-team-policy-template) informed the team-policy adoption recipe, while [MISP Docker Lifecycle Manager](https://github.com/Tuxmint-Open-Source/misp-docker-lifecycle-manager) demonstrates the structured, safety-focused lifecycle approach that inspired this project's operational organization.
+
+### Automation identity
+
+The repository history also records work produced through [`hermes-speedboat`](https://github.com/hermes-speedboat), including commits authored as **Hermes Bitbull**.
+
+These acknowledgements distinguish direct commit authorship from external inspiration.
