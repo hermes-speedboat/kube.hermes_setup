@@ -59,22 +59,26 @@ This includes OAuth state, sessions, skills, memories, workspace files, and WebU
 Use `HERMES_BOOTSTRAP_DIR` to seed SOUL, memory, skills, plugins, cron jobs, config, and workspace context into the persistent PVCs. This is useful for repeatable installations where the Agent should start with known behavior.
 
 ```bash
-# Use a profile to bootstrap SOUL, memory, skills, and workspace
+# Use a profile to bootstrap SOUL, memory, selected skills, requirements, and workspace
+# (personal-assistant is the default)
 echo 'HERMES_BOOTSTRAP_PROFILE=universal-system-architect' >> hermes.env
-
-# Or build a fully custom bootstrap directory from shared + profile:
-# cp -a examples/bootstrap-shared ./bootstrap
-# cp -a examples/bootstrap-profiles/YOUR_PROFILE/. ./bootstrap/
-$EDITOR ./bootstrap/*
+./install.sh
 ```
 
-This replaces `cp -a examples/bootstrap ./bootstrap` from earlier versions — the old single-tree layout was split into shared skills and profile-specific overlays.
+```bash
+# Or build a fully custom bootstrap directory from shared + profile:
+cp -a examples/bootstrap-shared ./bootstrap
+cp -a examples/bootstrap-profiles/personal-assistant/. ./bootstrap/
+$EDITOR ./bootstrap/*
+cat >> hermes.env <<'EOF'
 HERMES_BOOTSTRAP_DIR=./bootstrap
 HERMES_BOOTSTRAP_MODE=missing
 HERMES_BOOTSTRAP_INCLUDE_AUTH=false
 EOF
 ./install.sh
 ```
+
+The profile workflow uses one canonical shared skill source plus `skills.txt` selection. Profile defaults from `defaults.conf` are applied only when the operator has not set the corresponding variable.
 
 Mapping:
 
@@ -216,10 +220,10 @@ Keep `HERMES_WRITE_SAFE_ROOT` on Agent, Dashboard, and WebUI so file tools use t
 
 ## Persistent Python addon packages
 
-Set `HERMES_ADDON_REQUIREMENTS` to install Python packages during `install.sh` without rebuilding images. The requirements file is packaged into the same init Secret mechanism as bootstrap data and installed into a uv-managed Python runtime under `/opt/data`.
+The selected profile activates its own `requirements.txt` by default. Set `HERMES_ADDON_REQUIREMENTS` to override it, or set `HERMES_ADDON_REQUIREMENTS=` explicitly to disable addon packages. The requirements file is packaged into the same init Secret mechanism as bootstrap data and installed into a uv-managed Python runtime under `/opt/data`.
 
 ```bash
-HERMES_ADDON_REQUIREMENTS=./bootstrap/requirements.txt
+HERMES_ADDON_REQUIREMENTS=./requirements.txt
 HERMES_ADDON_PYTHON_VERSION=3.13
 ENV_FILE=./hermes.env ./install.sh
 ```
@@ -252,7 +256,9 @@ export PATH=/opt/data/addon-venv/bin:/opt/data/uv/bin:$PATH
 
 ## Persistent HOME and SSH
 
-Agent, Dashboard, and WebUI always use `/opt/data` as persistent Unix home on the `hermes-home` PVC:
+Agent, Dashboard, and WebUI always use `/opt/data` as persistent Unix home on the `hermes-home` PVC.
+
+SSH setup defaults to `false` for `personal-assistant` and `true` for `universal-system-architect`. Override it explicitly when needed:
 
 ```bash
 HERMES_SSH_SETUP=true

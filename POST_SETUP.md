@@ -7,10 +7,10 @@ Short, copy/paste-oriented recipes for useful configuration after a fresh Hermes
 Available bootstrap examples:
 
 ```text
-https://github.com/Bitbull-Ideas/kube.hermes_setup/tree/main/examples/bootstrap/skills
+https://github.com/Bitbull-Ideas/kube.hermes_setup/tree/main/examples/bootstrap-shared/skills
 ```
 
-Review the available skills and install or activate only those needed for the instance. Current examples include:
+Select a bootstrap profile; its `skills.txt` installs only the required skills from this canonical shared directory. Current shared skills include:
 
 ```text
 github-setup-access

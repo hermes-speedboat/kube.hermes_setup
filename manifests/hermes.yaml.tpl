@@ -214,7 +214,8 @@ spec:
               printf '%s\n' 'A real Chromium browser is available through Hermes browser tools via the `BROWSER_CDP_URL` environment variable. Use browser tools for real UI/web verification, especially WebUI issues, JavaScript-rendered pages, login flows, Ingress checks, screenshots, browser console errors, and reproducing frontend problems. Use curl for HTTP status/headers/health endpoints, but do not rely only on curl for UI problems. Never print the full `BROWSER_CDP_URL`; it contains a token.'
             } > /opt/data/SOUL.md
           fi
-          mkdir -p /workspace/ansible/collections /workspace/ansible/group_vars /workspace/ansible/host_vars /workspace/ansible/inventory /workspace/ansible/playbooks /workspace/ansible/roles /opt/data/ansible/cp /opt/data/ansible/tmp
+          if [ "${HERMES_ANSIBLE_SETUP}" = "true" ] || [ "${HERMES_ANSIBLE_SETUP}" = "TRUE" ] || [ "${HERMES_ANSIBLE_SETUP}" = "1" ] || [ "${HERMES_ANSIBLE_SETUP}" = "yes" ] || [ "${HERMES_ANSIBLE_SETUP}" = "YES" ] || [ "${HERMES_ANSIBLE_SETUP}" = "on" ] || [ "${HERMES_ANSIBLE_SETUP}" = "ON" ]; then
+            mkdir -p /workspace/ansible/collections /workspace/ansible/group_vars /workspace/ansible/host_vars /workspace/ansible/inventory /workspace/ansible/playbooks /workspace/ansible/roles /opt/data/ansible/cp /opt/data/ansible/tmp
           if [ ! -f /workspace/ansible/ansible.cfg ]; then
             {
               printf '%s\n' '[defaults]'
@@ -240,6 +241,7 @@ spec:
               printf '%s\n' '[local]'
               printf '%s\n' 'localhost ansible_connection=local'
             } > /workspace/ansible/inventory/hosts.ini
+          fi
           fi
           chown -R ${HERMES_RUNTIME_UID}:${HERMES_RUNTIME_GID} /opt/data /workspace
           chmod 700 /opt/data
@@ -295,7 +297,10 @@ spec:
         args:
         - |
           set -eu
-          mkdir -p /opt/data /workspace/ansible/collections /workspace/ansible/group_vars /workspace/ansible/host_vars /workspace/ansible/inventory /workspace/ansible/playbooks /workspace/ansible/roles /opt/data/ansible/cp /opt/data/ansible/tmp
+          mkdir -p /opt/data /workspace
+          if [ -n "${HERMES_ANSIBLE_CONFIG}" ]; then
+            mkdir -p /workspace/ansible/collections /workspace/ansible/group_vars /workspace/ansible/host_vars /workspace/ansible/inventory /workspace/ansible/playbooks /workspace/ansible/roles /opt/data/ansible/cp /opt/data/ansible/tmp
+          fi
           chown -R ${HERMES_RUNTIME_UID}:${HERMES_RUNTIME_GID} /opt/data /workspace
           chmod 700 /opt/data
           [ ! -d /opt/data/.ssh ] || chmod 700 /opt/data/.ssh
@@ -344,7 +349,7 @@ spec:
         - name: UV_CACHE_DIR
           value: /opt/data/.cache/uv
         - name: ANSIBLE_CONFIG
-          value: /workspace/ansible/ansible.cfg
+          value: "${HERMES_ANSIBLE_CONFIG}"
         - name: PATH
           value: /opt/hermes/bin:/opt/hermes/.venv/bin:${HERMES_ADDON_VENV}/bin:${HERMES_UV_DIR}/bin:/opt/data/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         - name: API_SERVER_ENABLED
@@ -425,7 +430,10 @@ spec:
         args:
         - |
           set -eu
-          mkdir -p /opt/data /workspace/ansible/collections /workspace/ansible/group_vars /workspace/ansible/host_vars /workspace/ansible/inventory /workspace/ansible/playbooks /workspace/ansible/roles /opt/data/ansible/cp /opt/data/ansible/tmp
+          mkdir -p /opt/data /workspace
+          if [ -n "${HERMES_ANSIBLE_CONFIG}" ]; then
+            mkdir -p /workspace/ansible/collections /workspace/ansible/group_vars /workspace/ansible/host_vars /workspace/ansible/inventory /workspace/ansible/playbooks /workspace/ansible/roles /opt/data/ansible/cp /opt/data/ansible/tmp
+          fi
           chown -R ${HERMES_RUNTIME_UID}:${HERMES_RUNTIME_GID} /opt/data /workspace
           chmod 700 /opt/data
           [ ! -d /opt/data/.ssh ] || chmod 700 /opt/data/.ssh
@@ -476,7 +484,7 @@ spec:
         - name: UV_CACHE_DIR
           value: /opt/data/.cache/uv
         - name: ANSIBLE_CONFIG
-          value: /workspace/ansible/ansible.cfg
+          value: "${HERMES_ANSIBLE_CONFIG}"
         - name: PATH
           value: /opt/hermes/bin:/opt/hermes/.venv/bin:${HERMES_ADDON_VENV}/bin:${HERMES_UV_DIR}/bin:/opt/data/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         - name: HERMES_DASHBOARD_BASIC_AUTH_USERNAME
@@ -654,7 +662,7 @@ spec:
         - name: UV_CACHE_DIR
           value: /opt/data/.cache/uv
         - name: ANSIBLE_CONFIG
-          value: /workspace/ansible/ansible.cfg
+          value: "${HERMES_ANSIBLE_CONFIG}"
         - name: PATH
           value: ${HERMES_ADDON_VENV}/bin:${HERMES_UV_DIR}/bin:/opt/data/node/bin:/opt/data/node_modules/.bin:/opt/data/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         - name: HERMES_API_URL

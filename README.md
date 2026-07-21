@@ -113,10 +113,11 @@ Important variables:
 | `HERMES_WRITE_SAFE_ROOT` | Safe write roots, set by manifest to `/opt/data:/workspace` |
 | `HERMES_BOOTSTRAP_DIR` | Optional local bootstrap directory for SOUL.md, memories, skills, plugins, cron, config, and workspace files |
 | `HERMES_BOOTSTRAP_MODE` | `disabled`, `missing` (default), or `overwrite` |
-| `HERMES_BOOTSTRAP_PROFILE` | Prebuilt profile: `personal-assistant`, `universal-system-architect`, or leave empty |
-| `HERMES_ADDON_REQUIREMENTS` | Optional local `requirements.txt` installed into a persistent addon venv |
+| `HERMES_BOOTSTRAP_PROFILE` | Prebuilt profile; defaults to `personal-assistant`; set empty to disable profile composition |
+| `HERMES_ADDON_REQUIREMENTS` | Optional local `requirements.txt`; defaults to the selected profile's file; explicit empty disables it |
 | `HERMES_ADDON_PYTHON_VERSION` | Optional uv-managed addon Python version, default `3.13` |
-| `HERMES_SSH_SETUP` | Prepare `/opt/data/.ssh` with safe permissions, default `true` |
+| `HERMES_SSH_SETUP` | Prepare `/opt/data/.ssh`; profile default is `false` for personal assistant and `true` for system architect |
+| `HERMES_ANSIBLE_SETUP` | Create Ansible workspace/config and expose `ANSIBLE_CONFIG`; profile default follows the selected profile |
 | `HERMES_SSH_KEY_PATH` | SSH private key path under `/opt/data/.ssh`, default `/opt/data/.ssh/id_ed25519` |
 
 Secrets may be generated automatically by `install.sh` when variables are omitted. The generated/used initial values are written to `.rendered/generated-credentials.txt` with mode `0600`; this path is gitignored, but you should still move the values to a password manager and delete the file after installation.
@@ -153,6 +154,15 @@ Production mode rejects weak passwords by default. Lab mode is explicit because 
 
 You can seed a new or existing installation with agent configuration files by setting `HERMES_BOOTSTRAP_DIR` in `hermes.env` and rerunning `./install.sh`. The installer packages the local directory into `.rendered/bootstrap.tar.gz`, uploads it as the `hermes-bootstrap-archive` Kubernetes Secret, and the init job copies it into the persistent PVCs.
 
+The preferred path is `HERMES_BOOTSTRAP_PROFILE`. Each profile has a `skills.txt` allowlist and `defaults.conf` defaults. Skills remain canonical under `examples/bootstrap-shared/skills/`; the installer copies only the selected skill directories into the generated archive. Markdown links cannot install a skill, and repository symlinks are avoided because Kubernetes Secret/tar portability is better with generated copies.
+
+| Profile | Selected shared skills | Addon requirements | SSH | Ansible runtime |
+|---|---|---|---|---|
+| `personal-assistant` | `markdown-pdf`, `hermes-workspace-manager` | profile `requirements.txt` | `false` | `false` |
+| `universal-system-architect` | all five shared skills | profile `requirements.txt` with Ansible/cloud packages | `true` | `true` |
+
+Operator values win: explicitly set `HERMES_ADDON_REQUIREMENTS`, `HERMES_SSH_SETUP`, or `HERMES_ANSIBLE_SETUP` in `hermes.env` to override the profile default. An explicit empty `HERMES_ADDON_REQUIREMENTS=` disables profile addon packages.
+
 Supported source layout:
 
 ```text
@@ -177,14 +187,17 @@ bootstrap/
 Example:
 
 ```bash
-# Option A: use a prebuilt profile
-export HERMES_BOOTSTRAP_PROFILE=universal-system-architect
+# Option A: use a prebuilt profile (personal-assistant is the default)
 echo 'HERMES_BOOTSTRAP_PROFILE=universal-system-architect' >> hermes.env
+./install.sh
+./doctor.sh
+```
 
-# Option B: fully custom bootstrap directory
-# cp -a examples/bootstrap-shared ./bootstrap
-# cp -a examples/bootstrap-profiles/YOUR_PROFILE/. ./bootstrap/
-# $EDITOR ./bootstrap/*
+```bash
+# Option B: fully custom bootstrap directory (profile defaults still apply)
+cp -a examples/bootstrap-shared ./bootstrap
+cp -a examples/bootstrap-profiles/personal-assistant/. ./bootstrap/
+$EDITOR ./bootstrap/*
 cat >> hermes.env <<'EOF'
 HERMES_BOOTSTRAP_DIR=./bootstrap
 HERMES_BOOTSTRAP_MODE=missing
@@ -269,10 +282,10 @@ HERMES_ADDON_PYTHON_VERSION=3.13
 Example:
 
 ```bash
-cp examples/bootstrap/requirements.txt ./bootstrap/requirements.txt
-# edit ./bootstrap/requirements.txt, preferably with pinned versions
+cp examples/bootstrap-profiles/personal-assistant/requirements.txt ./requirements.txt
+# edit ./requirements.txt, preferably with pinned versions
 cat >> hermes.env <<'EOF'
-HERMES_ADDON_REQUIREMENTS=./bootstrap/requirements.txt
+HERMES_ADDON_REQUIREMENTS=./requirements.txt
 HERMES_ADDON_PYTHON_VERSION=3.13
 EOF
 ENV_FILE=./hermes.env ./install.sh
@@ -309,7 +322,7 @@ export PATH=/opt/data/addon-venv/bin:$PATH
 
 Do not mutate `/opt/hermes/.venv` or install ad-hoc packages into `/usr/local` if persistence matters. If a previous install created `/opt/data/addon-venv` with system Python, rerunning the installer migrates it to a uv-managed venv so the same Python works from WebUI too. For production-standard system tools or OS packages, prefer a custom `HERMES_AGENT_IMAGE`.
 
-For a persistent Ansible control-node pattern, including mount locations and visible roles/collections paths under `/workspace/ansible`, see [`docs/ansible.md`](docs/ansible.md) and `examples/bootstrap-profiles/universal-system-architect/requirements.txt`.
+For a persistent Ansible control-node pattern, including mount locations and visible roles/collections paths under `/workspace/ansible`, select `universal-system-architect`; its requirements file is activated automatically unless overridden. See [`docs/ansible.md`](docs/ansible.md).
 
 ## Repository layout
 
