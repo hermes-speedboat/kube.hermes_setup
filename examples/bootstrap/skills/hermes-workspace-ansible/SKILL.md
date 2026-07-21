@@ -15,7 +15,7 @@ metadata:
 
 ## Overview
 
-Act as a considerate team member in workspaces that provide an `ansible/` directory. Keep Ansible source, dependencies, generated artifacts, and task-specific scratch work inside that directory while work is active. Preserve existing conventions, do not disturb unrelated automation, and make completed work easy to review and archive. This skill is the specialized Ansible placement layer for `hermes-workspace-manager`: the established Ansible project directory is the task's topic folder, so do not create a duplicate generic topic folder.
+Act as a considerate team member in workspaces that provide an `ansible/` directory. Keep Ansible source, dependencies, generated artifacts, and task-specific scratch work inside that directory while work is active. Preserve existing conventions, do not disturb unrelated automation, and make completed work easy to review and archive. This skill is the specialized Ansible placement layer for `hermes-workspace-manager`: resolve `<workspace>/ansible` itself or one established project/subtree beneath it as the topic scope, according to the existing layout, and do not create a duplicate generic topic folder.
 
 Use `<workspace>` for the active workspace supplied by Hermes. The active paths are:
 
@@ -41,7 +41,7 @@ Do not use it to move unrelated workspace content into `ansible/`, or to archive
 
 1. Read workspace instructions such as `<workspace>/AGENTS.md` and inspect the existing `ansible/` layout, configuration, inventories, dependency files, and local conventions.
 2. Load `hermes-workspace-manager` when available and classify the task as Ansible-native work.
-3. Resolve the existing Ansible project directory beneath `<workspace>/ansible/` as the topic folder; do not create `<workspace>/<topic-name>` for the same work.
+3. Resolve `<workspace>/ansible/` or the smallest unambiguous existing project/subtree beneath it as the topic scope. Shared flat layouts may require the Ansible root; do not invent a project directory or create `<workspace>/<topic-name>` for the same work.
 4. Check version-control status before editing. Treat uncommitted or untracked files as potentially owned by another team member.
 5. Identify the smallest task-specific set of files. Reuse existing directories and naming conventions rather than creating parallel structures.
 6. Keep secrets out of playbooks, inventories, logs, requirement files, and commits. Use the project's established vault or secret-management mechanism.
@@ -225,7 +225,7 @@ Cleanup is complete only when disposable task-owned residue is gone, approved cl
 ## Verification Checklist
 
 - [ ] Workspace instructions and existing Ansible conventions were inspected
-- [ ] The Ansible project directory is the single resolved topic folder; no duplicate generic topic folder exists
+- [ ] The Ansible root or established project/subtree is the single resolved topic scope; no duplicate generic topic folder exists
 - [ ] All active Ansible task files are under `<workspace>/ansible/`
 - [ ] No unrelated or pre-existing work was overwritten or removed
 - [ ] New Python dependencies are in `ansible/requirements.txt`

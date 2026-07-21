@@ -20,7 +20,7 @@ hermes-workspace-manager
 markdown-pdf
 ```
 
-Install `hermes-workspace-manager` together with the Git and/or Ansible workspace skills when those workflows are used. The manager provides the generic lifecycle; the specialized skills select `git/`, `git_archive/`, `ansible/`, and `ansible_archive/` without creating duplicate topic folders.
+Install `hermes-workspace-manager` together with the Git and/or Ansible workspace skills when those workflows are used. The manager provides the generic lifecycle; the specialized skills select `git/`, `git_archive/`, `ansible/`, and `ansible_archive/` without creating duplicate topic folders. Ansible may resolve the shared `ansible/` root as its topic scope and archive only explicitly approved completed paths.
 
 ## Recipe: install and configure the team policy
 

@@ -26,10 +26,10 @@ An ephemeral conversation that creates or changes no task-related files does not
 Classify the task before choosing a folder:
 
 1. **Git repository work:** follow `hermes-workspace-git`. Use `<workspace>/git/<repository-name>` as the topic folder and `<workspace>/git_archive/<repository-name>` for approved archival.
-2. **Ansible-native work:** follow `hermes-workspace-ansible`. Use the established project location beneath `<workspace>/ansible` as the topic folder and `<workspace>/ansible_archive` for approved archival.
+2. **Ansible-native work:** follow `hermes-workspace-ansible`. Resolve either `<workspace>/ansible` itself or one established project/subtree beneath it as the topic scope, according to the existing layout. Archive only the approved completed paths beneath `<workspace>/ansible_archive`, preserving relative paths.
 3. **All other persistent work:** use a direct child topic folder at `<workspace>/<topic-name>` and archive it beneath `<workspace>/_archive` when requested.
 
-These are specialized routing rules, not competing workspace models. Once a specialized skill selects a repository or Ansible project directory, that directory is the resolved topic folder for this skill. Never create a second generic topic folder for the same work.
+These are specialized routing rules, not competing workspace models. Once a specialized skill selects a Git repository directory or an Ansible workspace/project scope, that location is resolved for this skill. Never create a second generic topic folder for the same work. An Ansible topic scope may contain shared active files; resolving it does not make the whole scope eligible for archival.
 
 ## Resolve the Topic
 
@@ -54,7 +54,7 @@ When the requested work is solved, ask whether follow-up is needed.
 - Create the selected archive container when necessary.
 - Never overwrite an existing archive. If the destination exists, append a timestamp using the format required by the specialized skill; for generic topics use `<topic-name>.YYYYMMDDhhmm`. If that also exists, generate another unique timestamp or ask.
 - Archive only inside the active workspace.
-- After moving, verify that the source is absent and the destination contains the expected files.
+- After moving, verify that every approved moved source path is absent and the destination contains the expected files. For generic and Git topics this is normally the whole topic directory; for Ansible it may be only selected completed files.
 
 Do not archive merely because the current conversation turn ended. Specialized skills may require additional checks or explicit consent before archival; follow the stricter rule.
 
@@ -85,5 +85,5 @@ After archiving:
 - [ ] The destination uses `_archive`, `git_archive`, or `ansible_archive` according to task classification.
 - [ ] Any collision was handled without overwriting.
 - [ ] Specialized consent and state checks were satisfied.
-- [ ] The source no longer exists.
+- [ ] Every approved moved source path no longer exists; shared Ansible workspace content remains intact.
 - [ ] The destination contains the expected files.
