@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Adds the `hermes-workspace-manager` bootstrap skill for topic-folder resolution, artifact containment, continuity, and explicit archival.
+
+### Changed
+
+- Integrates the generic workspace manager with the existing Git and Ansible workspace skills by defining specialized placement precedence and preventing duplicate topic folders.
+- Updates the bootstrap workspace instructions, SOUL profile, README, and post-setup guidance to describe the combined workspace lifecycle.
+
 ## [v2.0.1] - 2026-07-20
 
 ### Fixed

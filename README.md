@@ -166,6 +166,7 @@ bootstrap/
 │   ├── github-setup-access/      # Low-privilege public GitHub PR access
 │   ├── hermes-workspace-ansible/ # Ansible workspace and cleanup conventions
 │   ├── hermes-workspace-git/     # Git repository placement and archival rules
+│   ├── hermes-workspace-manager/ # Generic topic containment and lifecycle routing
 │   └── markdown-pdf/             # Reproducible Markdown-to-PDF workflow
 ├── plugins/                      -> /opt/data/plugins/
 ├── cron/                         -> /opt/data/cron/
@@ -193,6 +194,8 @@ Modes:
 - `disabled` ignores `HERMES_BOOTSTRAP_DIR`.
 
 `auth.json` is excluded unless `HERMES_BOOTSTRAP_INCLUDE_AUTH=true`. Treat bootstrap archives as sensitive if they contain memories, `.env`, OAuth state, or private skills. The local `bootstrap/` and `.rendered/` paths are gitignored.
+
+The workspace skills are designed to be loaded together. `hermes-workspace-manager` supplies generic topic resolution and lifecycle rules; `hermes-workspace-git` routes Git repositories to `git/` and `git_archive/`, while `hermes-workspace-ansible` routes Ansible-native work to `ansible/` and `ansible_archive/`. A Git repository is the topic folder. For Ansible, the topic scope may be the shared `ansible/` root or an established project/subtree, and archival moves only approved completed paths. Neither workflow creates an additional generic topic copy.
 
 ## Persistent HOME and SSH keypair
 

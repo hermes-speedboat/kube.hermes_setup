@@ -8,14 +8,14 @@ platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [git, workspace, repositories, cleanup, archive, collaboration]
-    related_skills: [github-pr-workflow, github-repo-management, hermes-workspace-ansible]
+    related_skills: [github-pr-workflow, github-repo-management, hermes-workspace-manager, hermes-workspace-ansible]
 ---
 
 # Hermes Workspace Git
 
 ## Overview
 
-Act as a considerate team member whenever work requires a Git clone, repository, or worktree in a Hermes workspace. Keep general Git repositories together, protect unrelated work, and make active versus closed projects obvious.
+Act as a considerate team member whenever work requires a Git clone, repository, or worktree in a Hermes workspace. Keep general Git repositories together, protect unrelated work, and make active versus closed projects obvious. This skill is the specialized Git placement layer for `hermes-workspace-manager`: the repository directory selected here is the task's topic folder, so do not create a duplicate generic topic folder.
 
 Use `<workspace>` for the active workspace supplied by Hermes. The standard paths are:
 
@@ -96,10 +96,11 @@ Classification is complete only when the repository's primary purpose and exact 
 Before cloning or creating a repository:
 
 1. Read `<workspace>/AGENTS.md` and any other workspace-level instructions.
-2. Inspect `<workspace>/git/` for an existing clone with the same repository identity.
-3. Inspect `<workspace>/git_archive/` for a prior closed copy that may contain useful history or indicate a naming conflict.
-4. Create `<workspace>/git/` if it does not exist.
-5. Use one directory per repository; do not mix unrelated repositories in one working tree.
+2. Load `hermes-workspace-manager` when available and classify the task as Git repository work.
+3. Inspect `<workspace>/git/` for an existing clone with the same repository identity.
+4. Inspect `<workspace>/git_archive/` for a prior closed copy that may contain useful history or indicate a naming conflict.
+5. Create `<workspace>/git/` if it does not exist.
+6. Use one directory per repository; do not mix unrelated repositories in one working tree.
 
 For a clone:
 
@@ -114,6 +115,8 @@ Before cloning, check whether the destination exists. Never overwrite or delete 
 Do not place access tokens in clone URLs. Use an SSH identity, credential helper, askpass helper, or a non-logging API authentication mechanism.
 
 Preparation is complete only when the selected path is collision-free and no existing work was overwritten.
+
+The selected `<workspace>/git/<repository-name>` directory also satisfies the topic-resolution requirement from `hermes-workspace-manager`. Keep repository-specific artifacts within that boundary and do not mirror them under `<workspace>/<repository-name>`.
 
 ## 3. Inspect the Repository Before Changing It
 
@@ -290,6 +293,7 @@ Do not leave a duplicate in the old location. Report the correction explicitly.
 ## Verification Checklist
 
 - [ ] Repository primary purpose was inspected and classified
+- [ ] The repository directory is the single resolved topic folder; no duplicate generic topic folder exists
 - [ ] Non-Ansible repository is under `<workspace>/git/<name>` while active
 - [ ] Ansible-native repositories remain governed by `hermes-workspace-ansible`
 - [ ] Workspace and repository instructions were read

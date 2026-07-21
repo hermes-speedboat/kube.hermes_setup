@@ -52,6 +52,8 @@ docs/operations.md                Day-2 runbook
 docs/security.md                  Security model and secret-handling rules
 docs/troubleshooting.md           Known failure modes and fixes
 docs/codex-auth.md                Manual Codex OAuth pairing
+examples/bootstrap/skills/        Sanitized reusable bootstrap skills
+examples/bootstrap/workspace/     Example workspace-level instructions
 ```
 
 Generated/local files that must not be committed:
@@ -105,6 +107,8 @@ bash -n install.sh maintain.sh doctor.sh
 python3 -m py_compile scripts/render_template.py
 rm -rf scripts/__pycache__
 ```
+
+When bootstrap skills change, also verify that every `SKILL.md` starts with YAML frontmatter, has matching `name` and directory values, contains a non-empty body, and that every `metadata.hermes.related_skills` reference to another bundled skill resolves.
 
 Render validation:
 
