@@ -1,5 +1,7 @@
 # local configuration / secrets
 /bootstrap/
+/current_config/
+/configuration_answers
 hermes.env
 *.env
 *.secret

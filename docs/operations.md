@@ -56,6 +56,17 @@ This includes OAuth state, sessions, skills, memories, workspace files, and WebU
 
 ## Bootstrap agent configuration
 
+The recommended configuration lifecycle is:
+
+```bash
+./setup.sh
+# Later, after git pull:
+rm -rf current_config
+./setup.sh --from-answers
+```
+
+`current_config/` is disposable and contains the composed bootstrap, `hermes.env`, and installer artifacts. The wizard writes the Agent-native configuration to `current_config/bootstrap/config.yaml`; the installer injects it as `/opt/data/config.yaml` on the persistent `hermes-home` PVC, so a Pod restart preserves it. The root-level `configuration_answers` file preserves all answers, including secret-bearing answers, with mode `0600`. Both paths are Git-ignored. Bootstrap mode `missing` seeds absent PVC files and preserves later edits; `overwrite` replaces bootstrap-managed files on the next installer run.
+
 Use `HERMES_BOOTSTRAP_DIR` to seed SOUL, memory, skills, plugins, cron jobs, config, and workspace context into the persistent PVCs. This is useful for repeatable installations where the Agent should start with known behavior.
 
 ```bash
@@ -78,7 +89,7 @@ EOF
 ./install.sh
 ```
 
-The profile workflow uses one canonical shared skill source plus `skills.txt` selection. Profile defaults from `defaults.conf` are applied only when the operator has not set the corresponding variable.
+The profile workflow uses one canonical shared skill source plus `skills.txt` selection. Profile defaults from `defaults.conf` are applied only when the operator has not set the corresponding variable. For generated profile composition, `HERMES_ANSIBLE_SETUP=false` excludes the profile's `workspace/ansible` tree as well as disabling Ansible initialization. This is non-destructive: it does not remove files already stored on a workspace PVC, and it does not filter an operator-owned custom `HERMES_BOOTSTRAP_DIR`.
 
 Mapping:
 
@@ -95,7 +106,7 @@ workspace/               -> /workspace/
 auth.json                -> /opt/data/auth.json only with HERMES_BOOTSTRAP_INCLUDE_AUTH=true
 ```
 
-Use `HERMES_BOOTSTRAP_MODE=missing` for normal installs/upgrades. Use `overwrite` only when you intentionally want the bootstrap source to replace existing files. Bootstrap data can contain personal data or credentials; keep real `bootstrap/` directories out of git.
+Use `HERMES_BOOTSTRAP_MODE=missing` for normal installs/upgrades. Use `overwrite` only when you intentionally want the bootstrap source to replace existing files. Bootstrap data, `current_config/`, and `configuration_answers` can contain personal data or credentials; keep them out of Git.
 
 ## Password rotation
 

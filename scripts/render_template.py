@@ -10,6 +10,50 @@ if len(sys.argv) != 3:
 
 tpl = Path(sys.argv[1]).read_text()
 
+
+def enabled(name: str, default: bool = True) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.lower() in {"1", "true", "yes", "on"}
+
+
+disabled_resources: set[tuple[str, str]] = set()
+if not enabled("HERMES_DASHBOARD_ENABLED"):
+    disabled_resources.update({
+        ("Middleware", "hermes-dashboard-login-rewrite"),
+        ("Deployment", "hermes-dashboard"),
+        ("Service", "hermes-dashboard"),
+        ("Ingress", "hermes-dashboard"),
+        ("Ingress", "hermes-dashboard-login"),
+    })
+if not enabled("HERMES_WEBUI_ENABLED"):
+    disabled_resources.update({
+        ("Deployment", "hermes-webui"),
+        ("Service", "hermes-webui"),
+        ("Ingress", "hermes-webui"),
+    })
+if not enabled("HERMES_BROWSER_ENABLED"):
+    disabled_resources.update({
+        ("Deployment", "hermes-browser"),
+        ("Service", "hermes-browser"),
+        ("NetworkPolicy", "hermes-browser-restrict"),
+    })
+
+documents = []
+for document in tpl.split("\n---\n"):
+    kind_match = re.search(r"(?m)^kind:\s*(\S+)\s*$", document)
+    name_match = re.search(
+        r"(?ms)^metadata:\s*\n(?:^[ ]+.*\n)*?^[ ]+name:\s*(\S+)\s*$", document
+    )
+    identity = (
+        kind_match.group(1) if kind_match else "",
+        name_match.group(1) if name_match else "",
+    )
+    if identity not in disabled_resources:
+        documents.append(document)
+tpl = "\n---\n".join(documents)
+
 # Handle the few shell-style conditional blocks used in the manifest template.
 storage_line = "${STORAGE_CLASS_NAME:+storageClassName: ${STORAGE_CLASS_NAME}}"
 storage = os.environ.get("STORAGE_CLASS_NAME", "")

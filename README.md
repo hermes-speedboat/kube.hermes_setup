@@ -59,24 +59,31 @@ On the admin workstation:
 - `kubectl`
 - `openssl`
 - `bash`
+- `python3`
+- `tar`
 - Kubernetes context with permissions to create namespace-scoped resources
 - Ingress controller compatible with standard Kubernetes Ingress
 
-Optional but recommended:
-
-- `envsubst` from GNU gettext
-- `tar`, `sha256sum`
+For repository validation, maintainers also need Python `PyYAML` and access to `kubectl create --dry-run=client`.
 
 ## Quick start
 
 ```bash
 git clone https://github.com/Bitbull-Ideas/kube.hermes_setup.git
 cd kube.hermes_setup
-cp examples/hermes.env.example hermes.env
-$EDITOR hermes.env
-./install.sh
-./doctor.sh
+./setup.sh
 ```
+
+`setup.sh` runs the interactive configurator and optionally hands off to `install.sh`. It writes deployment settings to `current_config/hermes.env` and creates the native Agent configuration at `current_config/bootstrap/config.yaml`. The existing bootstrap mechanism installs that file as persistent `/opt/data/config.yaml`; normal Pod restarts do not remove it because `/opt/data` is backed by the `hermes-home` PVC. Generated artifacts stay below the Git-ignored `current_config/` directory. Answers are saved separately in the Git-ignored root file `configuration_answers` with mode `0600`.
+
+After pulling repository updates, rebuild clean generated configuration from the saved answers:
+
+```bash
+rm -rf current_config
+./setup.sh --from-answers
+```
+
+For manual configuration, copy `examples/hermes.env.example`, edit it, and run `ENV_FILE=./hermes.env ./install.sh`.
 
 Then perform Codex OAuth pairing if you use OpenAI Codex:
 
@@ -91,11 +98,17 @@ See [docs/codex-auth.md](docs/codex-auth.md).
 
 All deployment-specific values go into `hermes.env` or environment variables.
 
+Agent-native settings such as provider, model, terminal working directory, display behavior, and gateway binding are stored in bootstrap `config.yaml`. Use `HERMES_BOOTSTRAP_MODE=missing` to seed the file once without replacing later Agent-side edits; use `overwrite` only when the generated file should be authoritative on the next installer run.
+
 Important variables:
 
 | Variable | Purpose |
 |---|---|
 | `HERMES_NAMESPACE` | Kubernetes namespace, default `hermes` |
+| `HERMES_AGENT_ENABLED` | Mandatory Agent toggle; must remain `true` |
+| `HERMES_DASHBOARD_ENABLED` | Include Dashboard deployment, service, middleware, and ingress |
+| `HERMES_WEBUI_ENABLED` | Include WebUI deployment, service, and ingress |
+| `HERMES_BROWSER_ENABLED` | Include Browserless deployment, service, and NetworkPolicy |
 | `WEBUI_HOST` | Public WebUI FQDN |
 | `DASHBOARD_HOST` | Public dashboard FQDN |
 | `TLS_SECRET_NAME` | Optional TLS secret name if your Ingress uses one |
@@ -117,7 +130,9 @@ Important variables:
 | `HERMES_ADDON_REQUIREMENTS` | Optional local `requirements.txt`; defaults to the selected profile's file; explicit empty disables it |
 | `HERMES_ADDON_PYTHON_VERSION` | Optional uv-managed addon Python version, default `3.13` |
 | `HERMES_SSH_SETUP` | Prepare `/opt/data/.ssh`; profile default is `false` for personal assistant and `true` for system architect |
-| `HERMES_ANSIBLE_SETUP` | Create Ansible workspace/config and expose `ANSIBLE_CONFIG`; profile default follows the selected profile |
+| `HERMES_ANSIBLE_SETUP` | Include/create the profile Ansible workspace and expose `ANSIBLE_CONFIG`; profile default follows the selected profile |
+| `HERMES_ANSIBLE_CONFIG` | Ansible config path exposed to containers; the default path is generated automatically, while a custom path must be supplied by the selected/custom bootstrap |
+| `HERMES_ANSIBLE_VERSION` | Exact `ansible` package version injected into generated requirements when setup is enabled; default `14.1.0` |
 | `HERMES_SSH_KEY_PATH` | SSH private key path under `/opt/data/.ssh`, default `/opt/data/.ssh/id_ed25519` |
 
 Secrets may be generated automatically by `install.sh` when variables are omitted. The generated/used initial values are written to `.rendered/generated-credentials.txt` with mode `0600`; this path is gitignored, but you should still move the values to a password manager and delete the file after installation.
@@ -126,8 +141,8 @@ Secrets may be generated automatically by `install.sh` when variables are omitte
 
 Application authentication is intentionally simple:
 
-- Dashboard BasicAuth is always configured from `DASHBOARD_AUTH_USER` / `DASHBOARD_AUTH_PASSWORD`.
-- WebUI password auth uses the same Kubernetes Secret (`secret/hermes-dashboard-auth:password`) via `HERMES_WEBUI_PASSWORD`.
+- Dashboard BasicAuth is configured from `DASHBOARD_AUTH_USER` / `DASHBOARD_AUTH_PASSWORD` when Dashboard is selected.
+- WebUI password auth uses the same Kubernetes Secret (`secret/hermes-dashboard-auth:password`) when WebUI is selected.
 
 Edge authentication, if required, belongs in your Ingress/auth layer outside this installer.
 
@@ -161,7 +176,7 @@ The preferred path is `HERMES_BOOTSTRAP_PROFILE`. Each profile has a `skills.txt
 | `personal-assistant` | `markdown-pdf`, `hermes-workspace-manager` | profile `requirements.txt` | `false` | `false` |
 | `universal-system-architect` | all five shared skills | profile `requirements.txt` with Ansible/cloud packages | `true` | `true` |
 
-Operator values win: explicitly set `HERMES_ADDON_REQUIREMENTS`, `HERMES_SSH_SETUP`, or `HERMES_ANSIBLE_SETUP` in `hermes.env` to override the profile default. An explicit empty `HERMES_ADDON_REQUIREMENTS=` disables profile addon packages.
+Operator values win: explicitly set `HERMES_ADDON_REQUIREMENTS`, `HERMES_SSH_SETUP`, `HERMES_ANSIBLE_SETUP`, `HERMES_ANSIBLE_VERSION`, or `HERMES_ANSIBLE_CONFIG` in `hermes.env` to override the profile default. When Ansible setup is enabled, the installer adds the selected `ansible==<version>` to its generated copy of the addon requirements, even when the selected profile is `personal-assistant`; source requirements are never modified. An explicit empty `HERMES_ADDON_REQUIREMENTS=` disables profile addon packages but still permits the explicitly enabled Ansible package. On a fresh deployment, `HERMES_ANSIBLE_SETUP=false` excludes a profile-provided `workspace/ansible` tree and removes its profile-default Ansible package; it does not delete existing PVC files or rewrite operator-owned custom requirements.
 
 Supported source layout:
 

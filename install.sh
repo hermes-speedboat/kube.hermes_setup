@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${ENV_FILE:-$ROOT_DIR/hermes.env}"
-RENDER_DIR="$ROOT_DIR/.rendered"
+RENDER_DIR="${HERMES_RENDER_DIR:-$ROOT_DIR/.rendered}"
 MANIFEST_OUT="$RENDER_DIR/hermes.yaml"
 BOOTSTRAP_ARCHIVE="$RENDER_DIR/bootstrap.tar.gz"
 BOOTSTRAP_STAGE="$RENDER_DIR/bootstrap-stage"
@@ -36,19 +36,46 @@ load_env() {
   set +a
 }
 
+prepare_paths() {
+  RENDER_DIR="${HERMES_RENDER_DIR:-$ROOT_DIR/.rendered}"
+  MANIFEST_OUT="$RENDER_DIR/hermes.yaml"
+  BOOTSTRAP_ARCHIVE="$RENDER_DIR/bootstrap.tar.gz"
+  BOOTSTRAP_STAGE="$RENDER_DIR/bootstrap-stage"
+}
+
+is_truthy() {
+  [[ "${1:-}" =~ ^(1|true|TRUE|yes|YES|on|ON)$ ]]
+}
+
+enabled_deployments() {
+  printf '%s\n' hermes-agent
+  is_truthy "$HERMES_DASHBOARD_ENABLED" && printf '%s\n' hermes-dashboard
+  is_truthy "$HERMES_WEBUI_ENABLED" && printf '%s\n' hermes-webui
+  is_truthy "$HERMES_BROWSER_ENABLED" && printf '%s\n' hermes-browser
+}
+
 validate() {
   require_cmd kubectl
   require_cmd openssl
   [[ -n "${HERMES_NAMESPACE:-}" ]] || fail "HERMES_NAMESPACE is required"
-  [[ -n "${WEBUI_HOST:-}" ]] || fail "WEBUI_HOST is required"
-  [[ -n "${DASHBOARD_HOST:-}" ]] || fail "DASHBOARD_HOST is required"
-  [[ "$WEBUI_HOST" != *example.com ]] || warn "WEBUI_HOST still uses example.com"
-  [[ "$DASHBOARD_HOST" != *example.com ]] || warn "DASHBOARD_HOST still uses example.com"
+  is_truthy "$HERMES_AGENT_ENABLED" || fail "HERMES_AGENT_ENABLED must remain true; the Agent is mandatory"
+  if is_truthy "$HERMES_WEBUI_ENABLED"; then
+    [[ -n "${WEBUI_HOST:-}" ]] || fail "WEBUI_HOST is required when WebUI is enabled"
+    [[ "$WEBUI_HOST" != *example.com ]] || warn "WEBUI_HOST still uses example.com"
+  fi
+  if is_truthy "$HERMES_DASHBOARD_ENABLED"; then
+    [[ -n "${DASHBOARD_HOST:-}" ]] || fail "DASHBOARD_HOST is required when Dashboard is enabled"
+    [[ "$DASHBOARD_HOST" != *example.com ]] || warn "DASHBOARD_HOST still uses example.com"
+  fi
 }
 
 prepare_defaults() {
   export HERMES_BOOTSTRAP_PROFILE="${HERMES_BOOTSTRAP_PROFILE-personal-assistant}"
   apply_profile_defaults "$HERMES_BOOTSTRAP_PROFILE"
+  export HERMES_AGENT_ENABLED="${HERMES_AGENT_ENABLED:-true}"
+  export HERMES_DASHBOARD_ENABLED="${HERMES_DASHBOARD_ENABLED:-true}"
+  export HERMES_WEBUI_ENABLED="${HERMES_WEBUI_ENABLED:-true}"
+  export HERMES_BROWSER_ENABLED="${HERMES_BROWSER_ENABLED:-true}"
   export HERMES_NAMESPACE="${HERMES_NAMESPACE:-hermes}"
   export INGRESS_CLASS_NAME="${INGRESS_CLASS_NAME:-traefik}"
   export TRAEFIK_ENTRYPOINT="${TRAEFIK_ENTRYPOINT:-websecure}"
@@ -72,10 +99,16 @@ prepare_defaults() {
   export HERMES_ADDON_VENV="/opt/data/addon-venv"
   export HERMES_ADDON_PYTHON_VERSION="${HERMES_ADDON_PYTHON_VERSION:-3.13}"
   export HERMES_ANSIBLE_SETUP="${HERMES_ANSIBLE_SETUP:-false}"
-  if [[ "$HERMES_ANSIBLE_SETUP" =~ ^(1|true|TRUE|yes|YES|on|ON)$ ]]; then
-    export HERMES_ANSIBLE_CONFIG="/workspace/ansible/ansible.cfg"
-  else
-    export HERMES_ANSIBLE_CONFIG=""
+  export HERMES_ANSIBLE_VERSION="${HERMES_ANSIBLE_VERSION:-14.1.0}"
+  if is_truthy "$HERMES_ANSIBLE_SETUP"; then
+    export HERMES_SSH_SETUP=true
+  fi
+  if [[ -z "${HERMES_ANSIBLE_CONFIG+x}" ]]; then
+    if [[ "$HERMES_ANSIBLE_SETUP" =~ ^(1|true|TRUE|yes|YES|on|ON)$ ]]; then
+      export HERMES_ANSIBLE_CONFIG="/workspace/ansible/ansible.cfg"
+    else
+      export HERMES_ANSIBLE_CONFIG=""
+    fi
   fi
   export HERMES_SSH_SETUP="${HERMES_SSH_SETUP:-true}"
   export HERMES_SSH_GENERATE_KEY="${HERMES_SSH_GENERATE_KEY:-${HERMES_SSH_SETUP}}"
@@ -100,14 +133,23 @@ prepare_defaults() {
   export STORAGE_CLASS_NAME="${STORAGE_CLASS_NAME:-}"
   export MODEL_PROVIDER="${MODEL_PROVIDER:-codex}"
   export MODEL_NAME="${MODEL_NAME:-gpt-5.6-luna}"
-  export DASHBOARD_AUTH_USER="${DASHBOARD_AUTH_USER:-admin}"
-  export DASHBOARD_AUTH_PASSWORD="${DASHBOARD_AUTH_PASSWORD:-$(rand_hex 18)}"
+  if is_truthy "$HERMES_DASHBOARD_ENABLED" || is_truthy "$HERMES_WEBUI_ENABLED"; then
+    export DASHBOARD_AUTH_USER="${DASHBOARD_AUTH_USER:-admin}"
+    export DASHBOARD_AUTH_PASSWORD="${DASHBOARD_AUTH_PASSWORD:-$(rand_hex 18)}"
+  else
+    export DASHBOARD_AUTH_USER=""
+    export DASHBOARD_AUTH_PASSWORD=""
+  fi
   export API_SERVER_KEY="${API_SERVER_KEY:-$(rand_hex 32)}"
   if [[ ${#API_SERVER_KEY} -lt 16 ]]; then
     warn "API_SERVER_KEY is shorter than 16 characters; generating a strong key instead."
     export API_SERVER_KEY="$(rand_hex 32)"
   fi
-  export BROWSER_TOKEN="${BROWSER_TOKEN:-$(rand_hex 32)}"
+  if is_truthy "$HERMES_BROWSER_ENABLED"; then
+    export BROWSER_TOKEN="${BROWSER_TOKEN:-$(rand_hex 32)}"
+  else
+    export BROWSER_TOKEN=""
+  fi
   export BROWSER_CONCURRENT="${BROWSER_CONCURRENT:-4}"
   export BROWSER_QUEUED="${BROWSER_QUEUED:-10}"
   export BROWSER_TIMEOUT_MS="${BROWSER_TIMEOUT_MS:-30000}"
@@ -117,7 +159,11 @@ prepare_defaults() {
   if (( BROWSER_CONCURRENT < 4 )); then
     warn "BROWSER_CONCURRENT=$BROWSER_CONCURRENT is below the repo default 4; parallel WebUI screenshot/browser workflows can queue and time out during CDP handshakes."
   fi
-  export BROWSER_CDP_URL="ws://hermes-browser:3000/chromium?token=${BROWSER_TOKEN}"
+  if is_truthy "$HERMES_BROWSER_ENABLED"; then
+    export BROWSER_CDP_URL="ws://hermes-browser:3000/chromium?token=${BROWSER_TOKEN}"
+  else
+    export BROWSER_CDP_URL=""
+  fi
   case "$HERMES_BOOTSTRAP_MODE" in
     disabled|missing|overwrite) ;;
     *) fail "HERMES_BOOTSTRAP_MODE must be one of: disabled, missing, overwrite" ;;
@@ -140,6 +186,12 @@ prepare_defaults() {
   [[ "$HERMES_ADDON_PYTHON_VERSION" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]] || fail "HERMES_ADDON_PYTHON_VERSION must look like 3.13 or 3.13.5"
   case "$HERMES_SSH_SETUP" in true|false|TRUE|FALSE|1|0|yes|no|YES|NO|on|off|ON|OFF) ;; *) fail "HERMES_SSH_SETUP must be boolean" ;; esac
   case "$HERMES_ANSIBLE_SETUP" in true|false|TRUE|FALSE|1|0|yes|no|YES|NO|on|off|ON|OFF) ;; *) fail "HERMES_ANSIBLE_SETUP must be boolean" ;; esac
+  for component_value in "$HERMES_AGENT_ENABLED" "$HERMES_DASHBOARD_ENABLED" "$HERMES_WEBUI_ENABLED" "$HERMES_BROWSER_ENABLED"; do
+    case "$component_value" in true|false|TRUE|FALSE|1|0|yes|no|YES|NO|on|off|ON|OFF) ;; *) fail "component enablement values must be boolean" ;; esac
+  done
+  if is_truthy "$HERMES_ANSIBLE_SETUP"; then
+    [[ "$HERMES_ANSIBLE_VERSION" =~ ^[0-9]+(\.[0-9]+){1,2}$ ]] || fail "HERMES_ANSIBLE_VERSION must look like 14.1.0"
+  fi
   case "$HERMES_SSH_GENERATE_KEY" in true|false|TRUE|FALSE|1|0|yes|no|YES|NO|on|off|ON|OFF) ;; *) fail "HERMES_SSH_GENERATE_KEY must be boolean" ;; esac
   case "$HERMES_SSH_KEY_TYPE" in ed25519|rsa|ecdsa) ;; *) fail "HERMES_SSH_KEY_TYPE must be one of: ed25519, rsa, ecdsa" ;; esac
   [[ "$HERMES_SSH_KEY_PATH" = /opt/data/.ssh/* ]] || fail "HERMES_SSH_KEY_PATH must be under /opt/data/.ssh for PVC persistence"
@@ -177,6 +229,7 @@ apply_profile_defaults() {
   fi
   if [[ -z "${HERMES_ADDON_REQUIREMENTS+x}" && -n "${HERMES_PROFILE_DEFAULT_ADDON_REQUIREMENTS:-}" ]]; then
     export HERMES_ADDON_REQUIREMENTS="$profiledir/$HERMES_PROFILE_DEFAULT_ADDON_REQUIREMENTS"
+    export HERMES_PROFILE_REQUIREMENTS_SELECTED=true
   fi
 }
 
@@ -208,11 +261,14 @@ compose_profile_bootstrap() {
   done < "$profiledir/skills.txt"
   cp -a "$profiledir"/. "$stage"/
   rm -f "$stage/defaults.conf" "$stage/skills.txt" "$stage/requirements.txt"
+  if [[ ! "$HERMES_ANSIBLE_SETUP" =~ ^(1|true|TRUE|yes|YES|on|ON)$ ]]; then
+    rm -rf "$stage/workspace/ansible"
+  fi
   export HERMES_BOOTSTRAP_DIR="$stage"
 }
 
 archive_enabled() {
-  bootstrap_enabled || addon_requirements_enabled
+  bootstrap_enabled || addon_requirements_enabled || is_truthy "$HERMES_ANSIBLE_SETUP"
 }
 
 copy_bootstrap_path() {
@@ -259,6 +315,14 @@ create_bootstrap_archive() {
     copy_bootstrap_path "$HERMES_ADDON_REQUIREMENTS" "$BOOTSTRAP_STAGE/addons/requirements.txt"
   fi
 
+  if is_truthy "$HERMES_ANSIBLE_SETUP" || [[ "${HERMES_PROFILE_REQUIREMENTS_SELECTED:-false}" == true ]]; then
+    python3 "$ROOT_DIR/scripts/prepare_requirements.py" \
+      "$BOOTSTRAP_STAGE/addons/requirements.txt" \
+      "$HERMES_ANSIBLE_SETUP" \
+      "$HERMES_ANSIBLE_VERSION" \
+      "${HERMES_PROFILE_REQUIREMENTS_SELECTED:-false}"
+  fi
+
   if ! find "$BOOTSTRAP_STAGE" -type f -print -quit | grep -q .; then
     warn "bootstrap/addon archive requested but no supported files were found."
     rm -rf "$BOOTSTRAP_STAGE"
@@ -286,16 +350,20 @@ create_namespace_and_secrets() {
     kubectl -n "$HERMES_NAMESPACE" delete secret hermes-bootstrap-archive --ignore-not-found=true >/dev/null
   fi
 
-  local dash_tmpdir
-  dash_tmpdir="$(mktemp -d)"
-  chmod 700 "$dash_tmpdir"
-  printf '%s' "$DASHBOARD_AUTH_USER" > "$dash_tmpdir/username"
-  printf '%s' "$DASHBOARD_AUTH_PASSWORD" > "$dash_tmpdir/password"
-  kubectl -n "$HERMES_NAMESPACE" create secret generic hermes-dashboard-auth \
-    --from-file=username="$dash_tmpdir/username" \
-    --from-file=password="$dash_tmpdir/password" \
-    --dry-run=client -o yaml | kubectl apply -f -
-  rm -rf "$dash_tmpdir"
+  if is_truthy "$HERMES_DASHBOARD_ENABLED" || is_truthy "$HERMES_WEBUI_ENABLED"; then
+    local dash_tmpdir
+    dash_tmpdir="$(mktemp -d)"
+    chmod 700 "$dash_tmpdir"
+    printf '%s' "$DASHBOARD_AUTH_USER" > "$dash_tmpdir/username"
+    printf '%s' "$DASHBOARD_AUTH_PASSWORD" > "$dash_tmpdir/password"
+    kubectl -n "$HERMES_NAMESPACE" create secret generic hermes-dashboard-auth \
+      --from-file=username="$dash_tmpdir/username" \
+      --from-file=password="$dash_tmpdir/password" \
+      --dry-run=client -o yaml | kubectl apply -f -
+    rm -rf "$dash_tmpdir"
+  else
+    kubectl -n "$HERMES_NAMESPACE" delete secret hermes-dashboard-auth --ignore-not-found=true >/dev/null
+  fi
 
   local secret_tmpdir
   secret_tmpdir="$(mktemp -d)"
@@ -308,9 +376,13 @@ create_namespace_and_secrets() {
     --from-file=api-key="$secret_tmpdir/api-key" \
     --dry-run=client -o yaml | kubectl apply -f -
 
-  kubectl -n "$HERMES_NAMESPACE" create secret generic hermes-browser-token \
-    --from-file=token="$secret_tmpdir/token" \
-    --dry-run=client -o yaml | kubectl apply -f -
+  if is_truthy "$HERMES_BROWSER_ENABLED"; then
+    kubectl -n "$HERMES_NAMESPACE" create secret generic hermes-browser-token \
+      --from-file=token="$secret_tmpdir/token" \
+      --dry-run=client -o yaml | kubectl apply -f -
+  else
+    kubectl -n "$HERMES_NAMESPACE" delete secret hermes-browser-token --ignore-not-found=true >/dev/null
+  fi
 
   kubectl -n "$HERMES_NAMESPACE" create secret generic hermes-browser-cdp \
     --from-file=BROWSER_CDP_URL="$secret_tmpdir/BROWSER_CDP_URL" \
@@ -325,18 +397,25 @@ apply_and_wait() {
   log "Applying manifest"
   kubectl apply -f "$MANIFEST_OUT"
 
+  is_truthy "$HERMES_DASHBOARD_ENABLED" || kubectl -n "$HERMES_NAMESPACE" delete deploy,svc,ingress hermes-dashboard --ignore-not-found=true >/dev/null
+  is_truthy "$HERMES_DASHBOARD_ENABLED" || kubectl -n "$HERMES_NAMESPACE" delete ingress hermes-dashboard-login --ignore-not-found=true >/dev/null
+  is_truthy "$HERMES_DASHBOARD_ENABLED" || kubectl -n "$HERMES_NAMESPACE" delete middleware hermes-dashboard-login-rewrite --ignore-not-found=true >/dev/null 2>&1 || true
+  is_truthy "$HERMES_WEBUI_ENABLED" || kubectl -n "$HERMES_NAMESPACE" delete deploy,svc,ingress hermes-webui --ignore-not-found=true >/dev/null
+  if ! is_truthy "$HERMES_BROWSER_ENABLED"; then
+    kubectl -n "$HERMES_NAMESPACE" delete deploy,svc hermes-browser --ignore-not-found=true >/dev/null
+    kubectl -n "$HERMES_NAMESPACE" delete networkpolicy hermes-browser-restrict --ignore-not-found=true >/dev/null
+  fi
+
   log "Waiting for init config job"
   kubectl -n "$HERMES_NAMESPACE" wait --for=condition=complete job/hermes-init-config --timeout=300s
 
   log "Restarting deployments to pick up refreshed secrets"
-  kubectl -n "$HERMES_NAMESPACE" rollout restart \
-    deploy/hermes-agent \
-    deploy/hermes-dashboard \
-    deploy/hermes-webui \
-    deploy/hermes-browser >/dev/null
+  local deployments=()
+  mapfile -t deployments < <(enabled_deployments)
+  kubectl -n "$HERMES_NAMESPACE" rollout restart "${deployments[@]/#/deploy/}" >/dev/null
 
   log "Waiting for rollouts"
-  for d in hermes-agent hermes-dashboard hermes-webui hermes-browser; do
+  for d in "${deployments[@]}"; do
     kubectl -n "$HERMES_NAMESPACE" rollout status "deploy/$d" --timeout=600s
   done
 }
@@ -347,9 +426,9 @@ print_summary() {
 Hermes Kubernetes setup applied.
 
 Namespace:        $HERMES_NAMESPACE
-WebUI host:       $WEBUI_HOST
-Dashboard host:   $DASHBOARD_HOST
-Browser CDP:      ws://hermes-browser:3000/chromium?token=<redacted>
+WebUI host:       ${WEBUI_HOST:-disabled}
+Dashboard host:   ${DASHBOARD_HOST:-disabled}
+Browser enabled:  $HERMES_BROWSER_ENABLED
 Rendered file:    $MANIFEST_OUT
 
 Generated/used credentials were applied as Kubernetes Secrets only.
@@ -373,8 +452,9 @@ EOF
 
 main() {
   load_env
-  validate
+  prepare_paths
   prepare_defaults
+  validate
   create_bootstrap_archive
   render_manifest
   write_generated_credentials
@@ -383,4 +463,6 @@ main() {
   print_summary
 }
 
-main "$@"
+if [[ "${HERMES_INSTALL_LIB_ONLY:-false}" != "true" ]]; then
+  main "$@"
+fi

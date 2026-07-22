@@ -8,6 +8,10 @@ All notable changes to this project are documented in this file.
 
 - Adds the `hermes-workspace-manager` bootstrap skill for topic-folder resolution, artifact containment, continuity, and explicit archival.
 - Adds declarative profile skill allowlists and profile environment defaults with operator overrides.
+- Adds an interactive `configure.sh` wizard that stores the complete selected bootstrap, `hermes.env`, and generated artifacts under the Git-ignored `current_config/` directory before handing off to `install.sh`.
+- Adds independently selectable Dashboard, WebUI, and Browser components while keeping Agent mandatory.
+- Adds versioned Ansible package installation through `HERMES_ANSIBLE_VERSION` whenever Ansible setup is enabled.
+- Generates native Hermes `config.yaml` from the wizard and injects it through bootstrap into persistent `/opt/data/config.yaml`.
 
 ### Changed
 
@@ -15,6 +19,11 @@ All notable changes to this project are documented in this file.
 - Updates the bootstrap workspace instructions, SOUL profile, README, and post-setup guidance to describe the combined workspace lifecycle.
 - Makes `personal-assistant` select `markdown-pdf` and `hermes-workspace-manager` without duplicating canonical skill sources, disable SSH setup by default, and activate its own addon requirements.
 - Makes `universal-system-architect` select all shared skills, enable SSH setup, and activate its Ansible-oriented addon requirements by default.
+
+### Fixed
+
+- Makes `HERMES_ANSIBLE_SETUP=false` exclude a profile-provided Ansible workspace from generated bootstrap content on fresh deployments.
+- Preserves an explicit `HERMES_ANSIBLE_CONFIG` override and makes diagnostics validate the configured path rather than requiring the default path.
 
 ## [v2.0.1] - 2026-07-20
 
