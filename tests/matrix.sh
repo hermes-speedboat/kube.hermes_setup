@@ -90,6 +90,7 @@ for profile in personal-assistant universal-system-architect; do
           [[ "$HERMES_SSH_SETUP" == true ]]
           [[ "$HERMES_ANSIBLE_CONFIG" == /workspace/ansible/ansible.cfg ]]
           [[ -f "$extract/workspace/ansible/ansible.cfg" ]]
+          grep -qx 'remote_tmp = /opt/data/ansible/tmp' "$extract/workspace/ansible/ansible.cfg"
           [[ -f "$extract/addons/requirements.txt" ]]
           [[ "$(grep -Eci '^ansible' "$extract/addons/requirements.txt")" == 1 ]]
           grep -qx 'ansible==13.4.0' "$extract/addons/requirements.txt"

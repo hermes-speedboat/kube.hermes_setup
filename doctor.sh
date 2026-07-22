@@ -26,6 +26,8 @@ if [[ -z "${HERMES_ANSIBLE_CONFIG+x}" ]]; then
   fi
 fi
 HERMES_NAMESPACE="${HERMES_NAMESPACE:-hermes}"
+HERMES_RUNTIME_UID="${HERMES_RUNTIME_UID:-10000}"
+HERMES_RUNTIME_GID="${HERMES_RUNTIME_GID:-10000}"
 HERMES_DASHBOARD_ENABLED="${HERMES_DASHBOARD_ENABLED:-true}"
 HERMES_WEBUI_ENABLED="${HERMES_WEBUI_ENABLED:-true}"
 HERMES_BROWSER_ENABLED="${HERMES_BROWSER_ENABLED:-true}"
@@ -267,12 +269,55 @@ check_addon_python_runtime() {
       fail "$app addon Ansible missing or broken"
       continue
     fi
-    if kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -c '/opt/data/addon-venv/bin/ansible localhost -m ping -i localhost, -c local' >/dev/null 2>&1; then
+    if kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- setpriv --reuid="$HERMES_RUNTIME_UID" --regid="$HERMES_RUNTIME_GID" --clear-groups env HOME=/opt/data/home /bin/bash -l -c 'ansible localhost -m ping -i localhost, -c local' >/dev/null 2>&1; then
       ok "$app addon Ansible localhost ping"
     else
       fail "$app addon Ansible localhost ping failed"
     fi
   done
+
+  is_truthy "$HERMES_WEBUI_ENABLED" || return 0
+
+  # A direct kubectl exec inherits the Pod PATH and can pass while Hermes'
+  # login-shell snapshot has already lost the addon paths. First verify the
+  # exact subprocess HOME selected by Hermes in containers.
+  if kubectl -n "$HERMES_NAMESPACE" exec deploy/hermes-webui -- setpriv --reuid="$HERMES_RUNTIME_UID" --regid="$HERMES_RUNTIME_GID" --clear-groups env HOME=/opt/data/home EXPECTED_ANSIBLE_CONFIG="$HERMES_ANSIBLE_CONFIG" /bin/bash -l -c 'set -eu; test "$(command -v ansible)" = /opt/data/addon-venv/bin/ansible; test "${ANSIBLE_CONFIG:-}" = "$EXPECTED_ANSIBLE_CONFIG"' >/dev/null 2>&1; then
+    ok "hermes-webui subprocess HOME login shell preserves addon PATH/config"
+  else
+    fail "hermes-webui subprocess HOME login shell loses addon PATH/config"
+  fi
+
+  # Exercise the installed LocalEnvironment/terminal_tool implementation used
+  # by WebUI chat turns, from outside the copied source checkout.
+  local terminal_out
+  terminal_out="$(kubectl -n "$HERMES_NAMESPACE" exec deploy/hermes-webui -- setpriv --reuid="$HERMES_RUNTIME_UID" --regid="$HERMES_RUNTIME_GID" --clear-groups env HOME=/opt/data/home EXPECTED_ANSIBLE_CONFIG="$HERMES_ANSIBLE_CONFIG" /bin/bash -lc '
+    set -eu
+    cd /tmp
+    /app/venv/bin/python - <<"PY"
+import json
+import os
+import shlex
+from tools.terminal_tool import terminal_tool
+
+expected_config = shlex.quote(os.environ["EXPECTED_ANSIBLE_CONFIG"])
+result = json.loads(terminal_tool(
+    command=(
+        "set -eu; "
+        "test \"$(command -v ansible)\" = /opt/data/addon-venv/bin/ansible; "
+        f"test \"${{ANSIBLE_CONFIG:-}}\" = {expected_config}; "
+        "ansible localhost -m ping -i localhost, -c local"
+    ),
+    task_id=f"doctor-webui-addon-shell-{os.getpid()}",
+))
+print(result.get("output", ""))
+raise SystemExit(0 if result.get("exit_code") == 0 else 1)
+PY
+  ' 2>/dev/null || true)"
+  if [[ "$terminal_out" == *'"ping": "pong"'* ]]; then
+    ok "hermes-webui terminal tool preserves addon Ansible PATH/config"
+  else
+    fail "hermes-webui terminal tool cannot execute addon Ansible through its login-shell snapshot"
+  fi
 }
 
 check_dashboard_workspace_root() {

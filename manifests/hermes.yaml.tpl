@@ -168,6 +168,41 @@ spec:
             fi
             rm -rf /tmp/hermes-bootstrap
           fi
+          # Hermes' local terminal backend captures a login-shell snapshot.
+          # Debian's /etc/profile resets PATH, so restore the PVC-backed addon
+          # runtime afterwards through a small installer-managed profile hook.
+          # Keep the hook separate from .profile so existing operator content
+          # is preserved and the managed values remain idempotent.
+          mkdir -p /opt/data/home
+          {
+            printf '%s\n' '# Managed by kube.hermes_setup; do not put secrets in this file.'
+            printf '%s\n' 'export PATH="${HERMES_ADDON_VENV}/bin:${HERMES_UV_DIR}/bin:/opt/data/node/bin:/opt/data/node_modules/.bin:/opt/data/.local/bin:$PATH"'
+            printf '%s\n' 'export LANG="C.UTF-8"'
+            printf '%s\n' 'export LC_ALL="C.UTF-8"'
+            if [ -n "${HERMES_ANSIBLE_CONFIG}" ]; then
+              printf '%s\n' 'export ANSIBLE_CONFIG="${HERMES_ANSIBLE_CONFIG}"'
+            fi
+          } > /opt/data/home/.hermes-terminal-env
+          chmod 600 /opt/data/home/.hermes-terminal-env
+          update_terminal_profile() {
+            profile="$1"
+            tmp_profile="$profile.$$.tmp"
+            touch "$profile"
+            sed '/^# BEGIN kube.hermes_setup terminal environment$/,/^# END kube.hermes_setup terminal environment$/d' "$profile" > "$tmp_profile"
+            cat "$tmp_profile" > "$profile"
+            rm -f "$tmp_profile"
+          }
+          # Remove the block written by releases before the subprocess HOME
+          # contract was accounted for; preserve all operator-managed content.
+          update_terminal_profile /opt/data/.profile
+          update_terminal_profile /opt/data/home/.profile
+          {
+            printf '%s\n' ''
+            printf '%s\n' '# BEGIN kube.hermes_setup terminal environment'
+            printf '%s\n' '[ ! -r /opt/data/home/.hermes-terminal-env ] || . /opt/data/home/.hermes-terminal-env'
+            printf '%s\n' '# END kube.hermes_setup terminal environment'
+          } >> /opt/data/home/.profile
+          chmod 600 /opt/data/.profile /opt/data/home/.profile
           write_default_config() {
             {
               printf '%s\n' 'provider: ${MODEL_PROVIDER}'
@@ -223,7 +258,7 @@ spec:
               printf '%s\n' 'roles_path = /workspace/ansible/roles:/opt/data/ansible/roles'
               printf '%s\n' 'collections_path = /workspace/ansible/collections:/opt/data/ansible/collections'
               printf '%s\n' 'local_tmp = /opt/data/ansible/tmp'
-              printf '%s\n' 'remote_tmp = /tmp/.ansible-hermes'
+              printf '%s\n' 'remote_tmp = /opt/data/ansible/tmp'
               printf '%s\n' 'host_key_checking = True'
               printf '%s\n' 'retry_files_enabled = False'
               printf '%s\n' 'stdout_callback = default'
@@ -241,6 +276,14 @@ spec:
               printf '%s\n' '[local]'
               printf '%s\n' 'localhost ansible_connection=local'
             } > /workspace/ansible/inventory/hosts.ini
+          fi
+          # Migrate only the exact legacy installer default. A root kubectl
+          # exec could otherwise create /tmp/.ansible-hermes mode 0700 and
+          # block the unprivileged WebUI runtime user.
+          if grep -qx 'remote_tmp = /tmp/.ansible-hermes' /workspace/ansible/ansible.cfg 2>/dev/null; then
+            sed 's#^remote_tmp = /tmp/.ansible-hermes$#remote_tmp = /opt/data/ansible/tmp#' /workspace/ansible/ansible.cfg > /workspace/ansible/ansible.cfg.$$.tmp
+            cat /workspace/ansible/ansible.cfg.$$.tmp > /workspace/ansible/ansible.cfg
+            rm -f /workspace/ansible/ansible.cfg.$$.tmp
           fi
           fi
           chown -R ${HERMES_RUNTIME_UID}:${HERMES_RUNTIME_GID} /opt/data /workspace
