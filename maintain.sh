@@ -5,12 +5,28 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${ENV_FILE:-$ROOT_DIR/hermes.env}"
 [[ -f "$ENV_FILE" ]] && { set -a; source "$ENV_FILE"; set +a; }
 HERMES_NAMESPACE="${HERMES_NAMESPACE:-hermes}"
+HERMES_DASHBOARD_ENABLED="${HERMES_DASHBOARD_ENABLED:-true}"
+HERMES_WEBUI_ENABLED="${HERMES_WEBUI_ENABLED:-true}"
+HERMES_BROWSER_ENABLED="${HERMES_BROWSER_ENABLED:-true}"
+HERMES_RENDER_DIR="${HERMES_RENDER_DIR:-$ROOT_DIR/.rendered}"
 
 log() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mWARN:\033[0m %s\n' "$*" >&2; }
 fail() { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 rand_hex() { openssl rand -hex "${1:-32}"; }
-credential_output_file() { mkdir -p "$ROOT_DIR/.rendered"; chmod 700 "$ROOT_DIR/.rendered"; printf "%s/rotated-credentials-%s.txt" "$ROOT_DIR/.rendered" "$(date -u +%Y%m%dT%H%M%SZ)"; }
+credential_output_file() { mkdir -p "$HERMES_RENDER_DIR"; chmod 700 "$HERMES_RENDER_DIR"; printf "%s/rotated-credentials-%s.txt" "$HERMES_RENDER_DIR" "$(date -u +%Y%m%dT%H%M%SZ)"; }
+is_truthy() { [[ "${1:-}" =~ ^(1|true|TRUE|yes|YES|y|Y|on|ON)$ ]]; }
+enabled_deployments() {
+  printf '%s\n' hermes-agent
+  is_truthy "$HERMES_DASHBOARD_ENABLED" && printf '%s\n' hermes-dashboard
+  is_truthy "$HERMES_WEBUI_ENABLED" && printf '%s\n' hermes-webui
+  is_truthy "$HERMES_BROWSER_ENABLED" && printf '%s\n' hermes-browser
+}
+enabled_write_deployments() {
+  printf '%s\n' hermes-agent
+  is_truthy "$HERMES_DASHBOARD_ENABLED" && printf '%s\n' hermes-dashboard
+  is_truthy "$HERMES_WEBUI_ENABLED" && printf '%s\n' hermes-webui
+}
 
 usage() {
   cat <<'EOF'
@@ -36,8 +52,10 @@ status() {
 }
 
 restart() {
-  kubectl -n "$HERMES_NAMESPACE" rollout restart deploy/hermes-agent deploy/hermes-dashboard deploy/hermes-webui deploy/hermes-browser
-  for d in hermes-agent hermes-dashboard hermes-webui hermes-browser; do
+  local deployments=() d
+  mapfile -t deployments < <(enabled_deployments)
+  kubectl -n "$HERMES_NAMESPACE" rollout restart "${deployments[@]/#/deploy/}"
+  for d in "${deployments[@]}"; do
     kubectl -n "$HERMES_NAMESPACE" rollout status "deploy/$d" --timeout=600s
   done
 }
@@ -88,8 +106,10 @@ JSON
 restore() {
   local in="${1:-}"
   [[ -f "$in" ]] || fail "backup file required"
+  local deployments=() d
+  mapfile -t deployments < <(enabled_write_deployments)
   log "Scaling down write-heavy deployments"
-  kubectl -n "$HERMES_NAMESPACE" scale deploy/hermes-agent deploy/hermes-dashboard deploy/hermes-webui --replicas=0
+  kubectl -n "$HERMES_NAMESPACE" scale "${deployments[@]/#/deploy/}" --replicas=0
   kubectl -n "$HERMES_NAMESPACE" rollout status deploy/hermes-agent --timeout=120s >/dev/null 2>&1 || true
   kubectl -n "$HERMES_NAMESPACE" delete pod hermes-restore --ignore-not-found=true --wait=true >/dev/null 2>&1 || true
   cat <<JSON | kubectl apply -f - >/dev/null
@@ -122,17 +142,10 @@ JSON
   kubectl -n "$HERMES_NAMESPACE" exec hermes-restore -- sh -c 'rm -rf /opt/data/* /workspace/*; tar xzf /tmp/hermes-backup.tgz -C /; chown -R 1000:1000 /opt/data /workspace || true'
   kubectl -n "$HERMES_NAMESPACE" delete pod hermes-restore --ignore-not-found=true --wait=true >/dev/null
   log "Scaling deployments up"
-  kubectl -n "$HERMES_NAMESPACE" scale deploy/hermes-agent deploy/hermes-dashboard deploy/hermes-webui --replicas=1
-  for d in hermes-agent hermes-dashboard hermes-webui; do
+  kubectl -n "$HERMES_NAMESPACE" scale "${deployments[@]/#/deploy/}" --replicas=1
+  for d in "${deployments[@]}"; do
     kubectl -n "$HERMES_NAMESPACE" rollout status "deploy/$d" --timeout=600s
   done
-}
-
-is_truthy() {
-  case "${1:-}" in
-    1|true|TRUE|yes|YES|y|Y|on|ON) return 0 ;;
-    *) return 1 ;;
-  esac
 }
 
 prompt_secret() {
@@ -275,10 +288,15 @@ DASHBOARD_AUTH_PASSWORD=%s
   esac
 
   confirm_weak_password_if_interactive "Dashboard/WebUI password" "$dashboard_pass"
+  local auth_deployments=() d
+  is_truthy "$HERMES_DASHBOARD_ENABLED" && auth_deployments+=(deploy/hermes-dashboard)
+  is_truthy "$HERMES_WEBUI_ENABLED" && auth_deployments+=(deploy/hermes-webui)
+  ((${#auth_deployments[@]} > 0)) || fail "Dashboard and WebUI are both disabled; there is no application password to rotate"
   apply_dashboard_auth_secret "$dashboard_user" "$dashboard_pass"
-  kubectl -n "$HERMES_NAMESPACE" rollout restart deploy/hermes-dashboard deploy/hermes-webui
-  kubectl -n "$HERMES_NAMESPACE" rollout status deploy/hermes-dashboard --timeout=300s
-  kubectl -n "$HERMES_NAMESPACE" rollout status deploy/hermes-webui --timeout=300s
+  kubectl -n "$HERMES_NAMESPACE" rollout restart "${auth_deployments[@]}"
+  for d in "${auth_deployments[@]}"; do
+    kubectl -n "$HERMES_NAMESPACE" rollout status "$d" --timeout=300s
+  done
 
   cat <<EOF
 Rotated Dashboard/WebUI password secret.
@@ -294,12 +312,14 @@ EOF
   fi
 }
 rotate_browser_token() {
-  local token="${BROWSER_TOKEN:-$(rand_hex 32)}"
+  is_truthy "$HERMES_BROWSER_ENABLED" || fail "Browser component is disabled"
+  local token="${BROWSER_TOKEN:-$(rand_hex 32)}" deployments=() d
+  mapfile -t deployments < <(enabled_deployments)
   local cdp="ws://hermes-browser:3000/chromium?token=${token}"
   kubectl -n "$HERMES_NAMESPACE" create secret generic hermes-browser-token --from-literal=token="$token" --dry-run=client -o yaml | kubectl apply -f -
   kubectl -n "$HERMES_NAMESPACE" create secret generic hermes-browser-cdp --from-literal=BROWSER_CDP_URL="$cdp" --dry-run=client -o yaml | kubectl apply -f -
-  kubectl -n "$HERMES_NAMESPACE" rollout restart deploy/hermes-agent deploy/hermes-dashboard deploy/hermes-webui deploy/hermes-browser
-  for d in hermes-agent hermes-dashboard hermes-webui hermes-browser; do
+  kubectl -n "$HERMES_NAMESPACE" rollout restart "${deployments[@]/#/deploy/}"
+  for d in "${deployments[@]}"; do
     kubectl -n "$HERMES_NAMESPACE" rollout status "deploy/$d" --timeout=600s
   done
   echo "Rotated Browserless token. CDP endpoint: ws://hermes-browser:3000/chromium?token=<redacted>"

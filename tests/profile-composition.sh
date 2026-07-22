@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TMP_DIR="$(mktemp -d -t hermes-profile-test.XXXXXX)"
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+export HERMES_INSTALL_LIB_ONLY=true
+# shellcheck source=../install.sh
+source "$ROOT_DIR/install.sh"
+RENDER_DIR="$TMP_DIR/rendered"
+
+reset_profile_env() {
+  unset HERMES_BOOTSTRAP_DIR HERMES_SSH_SETUP HERMES_SSH_GENERATE_KEY
+  unset HERMES_ANSIBLE_SETUP HERMES_ANSIBLE_CONFIG HERMES_ADDON_REQUIREMENTS
+  unset HERMES_PROFILE_DEFAULT_SSH_SETUP HERMES_PROFILE_DEFAULT_ANSIBLE_SETUP
+  unset HERMES_PROFILE_DEFAULT_ADDON_REQUIREMENTS HERMES_PROFILE_REQUIREMENTS_SELECTED
+}
+
+assert_file() {
+  [[ -f "$1" ]] || { printf 'missing expected file: %s\n' "$1" >&2; exit 1; }
+}
+
+assert_absent() {
+  [[ ! -e "$1" ]] || { printf 'unexpected path: %s\n' "$1" >&2; exit 1; }
+}
+
+assert_skill_set() {
+  local stage="$1"
+  shift
+  local expected actual
+  expected="$(printf '%s\n' "$@" | sort)"
+  actual="$(find "$stage/skills" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)"
+  [[ "$actual" == "$expected" ]] || {
+    printf 'skill set mismatch\nexpected:\n%s\nactual:\n%s\n' "$expected" "$actual" >&2
+    exit 1
+  }
+}
+
+reset_profile_env
+HERMES_BOOTSTRAP_PROFILE=personal-assistant
+apply_profile_defaults "$HERMES_BOOTSTRAP_PROFILE"
+compose_profile_bootstrap "$HERMES_BOOTSTRAP_PROFILE"
+personal_stage="$HERMES_BOOTSTRAP_DIR"
+assert_skill_set "$personal_stage" hermes-workspace-manager markdown-pdf
+assert_absent "$personal_stage/workspace/ansible"
+[[ "$HERMES_SSH_SETUP" == false && "$HERMES_ANSIBLE_SETUP" == false ]]
+[[ "$HERMES_ADDON_REQUIREMENTS" == "$ROOT_DIR/examples/bootstrap-profiles/personal-assistant/requirements.txt" ]]
+
+reset_profile_env
+HERMES_BOOTSTRAP_PROFILE=universal-system-architect
+apply_profile_defaults "$HERMES_BOOTSTRAP_PROFILE"
+compose_profile_bootstrap "$HERMES_BOOTSTRAP_PROFILE"
+architect_stage="$HERMES_BOOTSTRAP_DIR"
+assert_skill_set "$architect_stage" github-setup-access hermes-workspace-ansible hermes-workspace-git hermes-workspace-manager markdown-pdf
+assert_file "$architect_stage/workspace/ansible/ansible.cfg"
+[[ "$HERMES_SSH_SETUP" == true && "$HERMES_ANSIBLE_SETUP" == true ]]
+[[ "$HERMES_ADDON_REQUIREMENTS" == "$ROOT_DIR/examples/bootstrap-profiles/universal-system-architect/requirements.txt" ]]
+
+reset_profile_env
+HERMES_BOOTSTRAP_PROFILE=universal-system-architect
+HERMES_SSH_SETUP=false
+HERMES_ANSIBLE_SETUP=false
+HERMES_ADDON_REQUIREMENTS=
+apply_profile_defaults "$HERMES_BOOTSTRAP_PROFILE"
+compose_profile_bootstrap "$HERMES_BOOTSTRAP_PROFILE"
+override_stage="$HERMES_BOOTSTRAP_DIR"
+assert_absent "$override_stage/workspace/ansible"
+[[ "$HERMES_SSH_SETUP" == false && "$HERMES_ANSIBLE_SETUP" == false ]]
+[[ -z "$HERMES_ADDON_REQUIREMENTS" ]]
+
+reset_profile_env
+HERMES_BOOTSTRAP_PROFILE=universal-system-architect
+HERMES_ANSIBLE_SETUP=true
+HERMES_ANSIBLE_CONFIG=/workspace/custom/ansible.cfg
+HERMES_ADDON_REQUIREMENTS=
+prepare_defaults
+[[ "$HERMES_ANSIBLE_CONFIG" == /workspace/custom/ansible.cfg ]]
+assert_file "$HERMES_BOOTSTRAP_DIR/workspace/ansible/ansible.cfg"
+
+custom_bootstrap="$TMP_DIR/operator-bootstrap"
+mkdir -p "$custom_bootstrap/workspace/ansible"
+printf '%s\n' '[defaults]' > "$custom_bootstrap/workspace/ansible/operator.cfg"
+reset_profile_env
+HERMES_BOOTSTRAP_PROFILE=universal-system-architect
+HERMES_BOOTSTRAP_DIR="$custom_bootstrap"
+HERMES_ANSIBLE_SETUP=false
+HERMES_ADDON_REQUIREMENTS=
+prepare_defaults
+[[ "$HERMES_BOOTSTRAP_DIR" == "$custom_bootstrap" ]]
+assert_file "$custom_bootstrap/workspace/ansible/operator.cfg"
+
+printf 'profile composition tests passed\n'
