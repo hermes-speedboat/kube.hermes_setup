@@ -33,7 +33,7 @@ HERMES_WEBUI_MAX_UPLOAD_MB=220
 Rationale:
 
 - `gpt-5.6-luna` + `codex` is the preferred model/provider default.
-- Browserless concurrency `1` is intentionally lab-friendly. Do not silently raise it in `install.sh`; warn/document instead.
+- Browserless concurrency `4` leaves capacity for parallel CDP checks and user sessions; keep docs and tests aligned with that default.
 - Runtime UID/GID `10000:10000` matches current Agent/Dashboard image behavior and prevents WebUI PVC permission failures.
 
 ## Important files
@@ -42,6 +42,8 @@ Rationale:
 README.md                         User-facing overview and quick start
 VERSION                           Current release version
 LICENCE                           MIT license
+configure.sh                      Interactive current_config generator and installer handoff
+setup.sh                          Stable entry point for configure.sh and --from-answers replay
 install.sh                        Render/apply installer, secret creation, rollout waits
 maintain.sh                       Status, backup/restore, restart, password/token rotation
 doctor.sh                         Health/diagnostic checks
@@ -61,6 +63,8 @@ Generated/local files that must not be committed:
 
 ```text
 hermes.env
+current_config/
+configuration_answers
 *.env
 .rendered/
 backups/
@@ -104,8 +108,11 @@ grep -RInE "$SECRET_REGEX|$PRIVATE_HOST_REGEX" . \
 Run these before committing normal repo changes:
 
 ```bash
-bash -n install.sh maintain.sh doctor.sh
-python3 -m py_compile scripts/render_template.py
+bash -n configure.sh install.sh maintain.sh doctor.sh
+python3 -m py_compile scripts/render_template.py scripts/prepare_requirements.py
+./tests/profile-composition.sh
+./tests/configure.sh
+./tests/matrix.sh
 rm -rf scripts/__pycache__
 ```
 
@@ -141,6 +148,25 @@ If a live cluster is reachable, also run:
 ```
 
 Do not require a live namespace for purely repo-local documentation/script syntax changes unless the change affects Kubernetes behavior and a cluster is available.
+
+## Live K3s profile validation protocol
+
+Changes to profile composition, defaults, bootstrap archives, init behavior, SSH, Ansible, addon requirements, ingress, authentication, or WebUI wiring require a disposable Linux/K3s test when a lab is available. Static rendering alone is not sufficient.
+
+1. Start from a fresh disposable Linux VM. Record the OS, Kubernetes version, container images, repository commit, CPU, memory, storage, and ingress controller without publishing private hostnames or addresses.
+2. Install K3s, wait for the node, DNS, storage provisioner, metrics server, and Traefik to become ready, and use a lab-only TLS certificate whose names are public-safe placeholders in any committed report.
+3. Deploy `personal-assistant` from a clean namespace and PVCs. Require all four deployments and the init job to become ready, then run `doctor.sh`.
+4. Verify the personal runtime has exactly `markdown-pdf` and `hermes-workspace-manager`, no generated SSH key, no `/workspace/ansible`, an empty `ANSIBLE_CONFIG`, and no Ansible package. Exercise the Markdown-to-PDF renderer and validate the produced PDF header, page count, and extracted text.
+5. Run the Hermes CLI directly in the Agent container (`hermes --version`) and exercise any changed interactive CLI path through a real TTY. Do not use `sh -lc` as proof of CLI absence because login shells can reset the image `PATH`.
+6. Use real Chromium against the deployed HTTPS ingress. Verify the login page, rejection of an invalid password, acceptance of the configured password, authenticated UI content, a clean authenticated browser console, and a visually inspected screenshot. Curl-only checks do not satisfy WebUI validation.
+7. Rerun `install.sh` for the same personal deployment and prove rollout success, PVC identity preservation, and persistence of a test artifact.
+8. Remove the personal namespace, deploy `universal-system-architect` from clean PVCs, and run `doctor.sh`. Verify all selected skills, persistent SSH key permissions and matching fingerprints, `ANSIBLE_CONFIG`, Ansible version/config, `ansible localhost -m ping`, and compatibility/imports for the full addon requirements.
+9. Repeat the CLI, TLS, invalid/valid Chromium login, authenticated console, and screenshot checks for the architect profile.
+10. Test defaults and explicit overrides separately. At minimum cover environment-only installation with a missing `ENV_FILE`, `HERMES_SSH_SETUP=false`, `HERMES_ANSIBLE_SETUP=false`, custom `HERMES_ANSIBLE_CONFIG`, and explicit-empty `HERMES_ADDON_REQUIREMENTS=`. On a fresh PVC, disabled Ansible must leave no `/workspace/ansible`, no addon Ansible binary, and an empty `ANSIBLE_CONFIG`.
+11. Test an invalid profile and confirm installation fails before Kubernetes resources are changed. Test a custom `HERMES_BOOTSTRAP_DIR` to ensure profile composition does not replace operator-owned bootstrap content.
+12. Delete temporary namespaces and sensitive generated files. Destroy the disposable VM when it is no longer needed. Update the PR with sanitized environment facts, exact pass/fail evidence, fixes made, and remaining limitations; never include internal DNS names, IP addresses, passwords, tokens, certificate keys, or generated credential contents.
+
+The PR description must distinguish static checks from live deployment, CLI, TLS/authentication, Chromium, idempotency, and cleanup evidence. Never leave an outdated statement such as "No live cluster changed" after performing live validation.
 
 ## Git workflow expectations
 
@@ -464,3 +490,5 @@ The Dashboard file browser is controlled by `HERMES_DASHBOARD_FILES_ROOT`, while
 ### Bootstrap feature
 
 `HERMES_BOOTSTRAP_DIR` packages a local directory into `.rendered/bootstrap.tar.gz` and applies it via Kubernetes Secret `hermes-bootstrap-archive`. `HERMES_BOOTSTRAP_PROFILE` composes one profile from `examples/bootstrap-shared/` plus its profile overlay. Each profile declares shared skill membership in `skills.txt` and environment defaults in `defaults.conf`; operator-set `HERMES_*` values override those defaults. The init job maps `SOUL.md`, `memories/`, `skills/`, `plugins/`, `cron/`, `config.yaml`, `.env`, and `workspace/` into `/opt/data` and `/workspace`. Default mode is `missing`; `overwrite` is destructive. `auth.json` is excluded unless `HERMES_BOOTSTRAP_INCLUDE_AUTH=true`. Never commit real bootstrap content; only sanitized examples under `examples/bootstrap-shared/` and `examples/bootstrap-profiles/`.
+
+For profile composition, `HERMES_ANSIBLE_SETUP=false` must also exclude a profile-provided `workspace/ansible` tree from the generated bootstrap. This filtering applies only to generated profile composition, not to an operator-owned custom `HERMES_BOOTSTRAP_DIR`, and it must never delete existing PVC data during a later non-destructive install.

@@ -18,9 +18,19 @@ if [[ -n "$HERMES_BOOTSTRAP_PROFILE" ]]; then
     fi
   fi
 fi
+if [[ -z "${HERMES_ANSIBLE_CONFIG+x}" ]]; then
+  if [[ "${HERMES_ANSIBLE_SETUP:-false}" =~ ^(1|true|TRUE|yes|YES|on|ON)$ ]]; then
+    HERMES_ANSIBLE_CONFIG=/workspace/ansible/ansible.cfg
+  else
+    HERMES_ANSIBLE_CONFIG=
+  fi
+fi
 HERMES_NAMESPACE="${HERMES_NAMESPACE:-hermes}"
 HERMES_RUNTIME_UID="${HERMES_RUNTIME_UID:-10000}"
 HERMES_RUNTIME_GID="${HERMES_RUNTIME_GID:-10000}"
+HERMES_DASHBOARD_ENABLED="${HERMES_DASHBOARD_ENABLED:-true}"
+HERMES_WEBUI_ENABLED="${HERMES_WEBUI_ENABLED:-true}"
+HERMES_BROWSER_ENABLED="${HERMES_BROWSER_ENABLED:-true}"
 WEBUI_HOST="${WEBUI_HOST:-}"
 DASHBOARD_HOST="${DASHBOARD_HOST:-}"
 
@@ -31,29 +41,39 @@ fail() { printf '\033[1;31mFAIL\033[0m %s\n' "$*"; fail_count=$((fail_count+1));
 
 check_cmd() { command -v "$1" >/dev/null 2>&1 && ok "command $1" || fail "missing command $1"; }
 
+is_truthy() { [[ "${1:-}" =~ ^(1|true|TRUE|yes|YES|on|ON)$ ]]; }
+enabled_apps() {
+  printf '%s\n' hermes-agent
+  is_truthy "$HERMES_DASHBOARD_ENABLED" && printf '%s\n' hermes-dashboard
+  is_truthy "$HERMES_WEBUI_ENABLED" && printf '%s\n' hermes-webui
+}
+enabled_deployments() {
+  enabled_apps
+  is_truthy "$HERMES_BROWSER_ENABLED" && printf '%s\n' hermes-browser
+}
+
 check_k8s() {
   kubectl cluster-info >/dev/null 2>&1 && ok "kubectl can reach cluster" || fail "kubectl cannot reach cluster"
   kubectl get ns "$HERMES_NAMESPACE" >/dev/null 2>&1 && ok "namespace $HERMES_NAMESPACE exists" || fail "namespace $HERMES_NAMESPACE missing"
 }
 
 check_rollouts() {
-  for d in hermes-agent hermes-dashboard hermes-webui hermes-browser; do
+  local d
+  while IFS= read -r d; do
     if kubectl -n "$HERMES_NAMESPACE" rollout status "deploy/$d" --timeout=5s >/dev/null 2>&1; then
       ok "deployment $d ready"
     else
       fail "deployment $d not ready"
     fi
-  done
+  done < <(enabled_deployments)
 }
 
 check_internal_health() {
-  local image="curlimages/curl:8.11.1"
-  if kubectl -n "$HERMES_NAMESPACE" run hermes-doctor-curl --rm -i --restart=Never --image="$image" -- sh -lc '
-    set -e
-    curl -fsS http://hermes-agent:8642/health >/dev/null
-    curl -fsS http://hermes-webui:8787/health >/dev/null
-    curl -fsS -o /dev/null -w "%{http_code}" http://hermes-dashboard:9119/ | grep -Eq "^(200|302)$"
-  ' >/dev/null 2>&1; then
+  local image="curlimages/curl:8.11.1" commands
+  commands='set -e; curl -fsS http://hermes-agent:8642/health >/dev/null'
+  is_truthy "$HERMES_WEBUI_ENABLED" && commands+='; curl -fsS http://hermes-webui:8787/health >/dev/null'
+  is_truthy "$HERMES_DASHBOARD_ENABLED" && commands+='; curl -fsS -o /dev/null -w "%{http_code}" http://hermes-dashboard:9119/ | grep -Eq "^(200|302)$"'
+  if kubectl -n "$HERMES_NAMESPACE" run hermes-doctor-curl --rm -i --restart=Never --image="$image" -- sh -lc "$commands" >/dev/null 2>&1; then
     ok "internal service health"
   else
     fail "internal service health failed"
@@ -61,6 +81,7 @@ check_internal_health() {
 }
 
 check_browser_cdp() {
+  is_truthy "$HERMES_BROWSER_ENABLED" || return 0
   local app pod env_cdp browser_pod cdp token pressure pressure_state running max_concurrent queued is_available timeout_seconds
   timeout_seconds="${DOCTOR_CDP_TIMEOUT_SECONDS:-45}"
 
@@ -110,7 +131,7 @@ PY
     fail "no running hermes-browser pod"
   fi
 
-  for app in hermes-agent hermes-dashboard hermes-webui; do
+  for app in $(enabled_apps); do
     pod="$(kubectl -n "$HERMES_NAMESPACE" get pods -l app="$app" --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
     [[ -n "$pod" ]] || { fail "no running $app pod for CDP check"; continue; }
 
@@ -170,7 +191,7 @@ PY
 
 check_home_ssh() {
   local app pod home xdg_config xdg_cache ansible_config ssh_setup key_path ssh_dir_mode key_mode pub_mode
-  for app in hermes-agent hermes-dashboard hermes-webui; do
+  for app in $(enabled_apps); do
     pod="$(kubectl -n "$HERMES_NAMESPACE" get pods -l app="$app" --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
     [[ -n "$pod" ]] || { fail "no running $app pod for HOME/SSH check"; continue; }
 
@@ -185,8 +206,8 @@ check_home_ssh() {
       fail "$app HOME/XDG are not persistent (HOME=${home:-unset}, XDG_CONFIG_HOME=${xdg_config:-unset}, XDG_CACHE_HOME=${xdg_cache:-unset})"
     fi
 
-    if [[ "${HERMES_ANSIBLE_SETUP:-false}" =~ ^(1|true|TRUE|yes|YES|on|ON)$ && "$ansible_config" == "/workspace/ansible/ansible.cfg" ]]; then
-      ok "$app ANSIBLE_CONFIG points to workspace config"
+    if [[ "${HERMES_ANSIBLE_SETUP:-false}" =~ ^(1|true|TRUE|yes|YES|on|ON)$ && -n "$HERMES_ANSIBLE_CONFIG" && "$ansible_config" == "$HERMES_ANSIBLE_CONFIG" ]]; then
+      ok "$app ANSIBLE_CONFIG matches configured path"
     elif [[ ! "${HERMES_ANSIBLE_SETUP:-false}" =~ ^(1|true|TRUE|yes|YES|on|ON)$ && -z "$ansible_config" ]]; then
       ok "$app ANSIBLE_CONFIG disabled for selected profile"
     else
@@ -215,6 +236,7 @@ check_home_ssh() {
 }
 
 check_webui_agent_source() {
+  is_truthy "$HERMES_WEBUI_ENABLED" || return 0
   local pod
   pod="$(kubectl -n "$HERMES_NAMESPACE" get pods -l app=hermes-webui --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
   [[ -n "$pod" ]] || { fail "no running hermes-webui pod"; return; }
@@ -228,9 +250,9 @@ check_webui_agent_source() {
 
 
 check_addon_python_runtime() {
-  [[ -n "${HERMES_ADDON_REQUIREMENTS:-}" ]] || return 0
+  [[ -n "${HERMES_ADDON_REQUIREMENTS:-}" ]] || is_truthy "${HERMES_ANSIBLE_SETUP:-false}" || return 0
   local app pod py_out ansible_out
-  for app in hermes-agent hermes-dashboard hermes-webui; do
+  for app in $(enabled_apps); do
     pod="$(kubectl -n "$HERMES_NAMESPACE" get pods -l app="$app" --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
     [[ -n "$pod" ]] || { fail "no running $app pod for addon Python check"; continue; }
     py_out="$(kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -c 'test -x /opt/data/uv/bin/uv && test -f /opt/data/addon-venv/.hermes-uv-managed && /opt/data/addon-venv/bin/python --version' 2>/dev/null || true)"
@@ -247,17 +269,19 @@ check_addon_python_runtime() {
       fail "$app addon Ansible missing or broken"
       continue
     fi
-    if kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- setpriv --reuid="$HERMES_RUNTIME_UID" --regid="$HERMES_RUNTIME_GID" --clear-groups env HOME=/opt/data/home /bin/bash -l -c 'ansible localhost -m ping -i /workspace/ansible/inventory/hosts.ini' >/dev/null 2>&1; then
+    if kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- setpriv --reuid="$HERMES_RUNTIME_UID" --regid="$HERMES_RUNTIME_GID" --clear-groups env HOME=/opt/data/home /bin/bash -l -c 'ansible localhost -m ping -i localhost, -c local' >/dev/null 2>&1; then
       ok "$app addon Ansible localhost ping"
     else
       fail "$app addon Ansible localhost ping failed"
     fi
   done
 
+  is_truthy "$HERMES_WEBUI_ENABLED" || return 0
+
   # A direct kubectl exec inherits the Pod PATH and can pass while Hermes'
   # login-shell snapshot has already lost the addon paths. First verify the
   # exact subprocess HOME selected by Hermes in containers.
-  if kubectl -n "$HERMES_NAMESPACE" exec deploy/hermes-webui -- setpriv --reuid="$HERMES_RUNTIME_UID" --regid="$HERMES_RUNTIME_GID" --clear-groups env HOME=/opt/data/home /bin/bash -l -c 'set -eu; test "$(command -v ansible)" = /opt/data/addon-venv/bin/ansible; test "${ANSIBLE_CONFIG:-}" = /workspace/ansible/ansible.cfg' >/dev/null 2>&1; then
+  if kubectl -n "$HERMES_NAMESPACE" exec deploy/hermes-webui -- setpriv --reuid="$HERMES_RUNTIME_UID" --regid="$HERMES_RUNTIME_GID" --clear-groups env HOME=/opt/data/home EXPECTED_ANSIBLE_CONFIG="$HERMES_ANSIBLE_CONFIG" /bin/bash -l -c 'set -eu; test "$(command -v ansible)" = /opt/data/addon-venv/bin/ansible; test "${ANSIBLE_CONFIG:-}" = "$EXPECTED_ANSIBLE_CONFIG"' >/dev/null 2>&1; then
     ok "hermes-webui subprocess HOME login shell preserves addon PATH/config"
   else
     fail "hermes-webui subprocess HOME login shell loses addon PATH/config"
@@ -266,20 +290,22 @@ check_addon_python_runtime() {
   # Exercise the installed LocalEnvironment/terminal_tool implementation used
   # by WebUI chat turns, from outside the copied source checkout.
   local terminal_out
-  terminal_out="$(kubectl -n "$HERMES_NAMESPACE" exec deploy/hermes-webui -- setpriv --reuid="$HERMES_RUNTIME_UID" --regid="$HERMES_RUNTIME_GID" --clear-groups env HOME=/opt/data/home /bin/bash -lc '
+  terminal_out="$(kubectl -n "$HERMES_NAMESPACE" exec deploy/hermes-webui -- setpriv --reuid="$HERMES_RUNTIME_UID" --regid="$HERMES_RUNTIME_GID" --clear-groups env HOME=/opt/data/home EXPECTED_ANSIBLE_CONFIG="$HERMES_ANSIBLE_CONFIG" /bin/bash -lc '
     set -eu
     cd /tmp
     /app/venv/bin/python - <<"PY"
 import json
 import os
+import shlex
 from tools.terminal_tool import terminal_tool
 
+expected_config = shlex.quote(os.environ["EXPECTED_ANSIBLE_CONFIG"])
 result = json.loads(terminal_tool(
     command=(
         "set -eu; "
         "test \"$(command -v ansible)\" = /opt/data/addon-venv/bin/ansible; "
-        "test \"${ANSIBLE_CONFIG:-}\" = /workspace/ansible/ansible.cfg; "
-        "ansible localhost -m ping -i /workspace/ansible/inventory/hosts.ini"
+        f"test \"${{ANSIBLE_CONFIG:-}}\" = {expected_config}; "
+        "ansible localhost -m ping -i localhost, -c local"
     ),
     task_id=f"doctor-webui-addon-shell-{os.getpid()}",
 ))
@@ -295,6 +321,7 @@ PY
 }
 
 check_dashboard_workspace_root() {
+  is_truthy "$HERMES_DASHBOARD_ENABLED" || return 0
   local pod root roots
   pod=$(kubectl -n "$HERMES_NAMESPACE" get pod -l app=hermes-dashboard --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
   [[ -n "$pod" ]] || { warn "no running dashboard pod for workspace-root check"; return; }
@@ -308,6 +335,7 @@ check_dashboard_workspace_root() {
 }
 
 check_webui_upload_limit() {
+  is_truthy "$HERMES_WEBUI_ENABLED" || return 0
   local pod expected actual
   expected="${HERMES_WEBUI_MAX_UPLOAD_MB:-220}"
   pod="$(kubectl -n "$HERMES_NAMESPACE" get pods -l app=hermes-webui --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"

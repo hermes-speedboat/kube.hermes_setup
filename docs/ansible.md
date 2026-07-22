@@ -4,12 +4,21 @@ This installer does not need a custom Agent image for a basic Ansible control se
 
 ## Install Ansible into the persistent addon venv
 
-Select the system architect profile. It activates its Ansible requirements, workspace seed, SSH setup, and `ANSIBLE_CONFIG` by default:
+The wizard enables the Ansible package, workspace seed, SSH key setup, and `ANSIBLE_CONFIG` together and asks for the package version:
+
+```bash
+./setup.sh
+```
+
+For manual configuration, select any profile and enable Ansible explicitly:
 
 ```bash
 cat >> hermes.env <<'EOF'
 HERMES_ADDON_PYTHON_VERSION=3.13
-HERMES_BOOTSTRAP_PROFILE=universal-system-architect
+HERMES_BOOTSTRAP_PROFILE=personal-assistant
+HERMES_ANSIBLE_SETUP=true
+HERMES_ANSIBLE_VERSION=14.1.0
+HERMES_SSH_SETUP=true
 HERMES_BOOTSTRAP_MODE=missing
 EOF
 ENV_FILE=./hermes.env ./install.sh
@@ -17,7 +26,7 @@ ENV_FILE=./hermes.env ./install.sh
 
 The packages are installed into `/opt/data/addon-venv`, backed by a uv-managed Python runtime under `/opt/data/uv`. Both paths are PVC-backed and survive Pod recreation. Because the Python runtime is under `/opt/data`, the same Ansible CLI works from the `hermes-agent`, `hermes-dashboard`, and `hermes-webui` containers.
 
-When `HERMES_BOOTSTRAP_PROFILE=universal-system-architect` is set, `install.sh` automatically composes the bootstrap directory from the selected shared skills and the profile-specific overlay. The profile defaults `HERMES_ANSIBLE_SETUP=true`, `HERMES_SSH_SETUP=true`, and its own `requirements.txt`; explicit values in `hermes.env` override those defaults.
+When `HERMES_ANSIBLE_SETUP=true`, `install.sh` adds `ansible==${HERMES_ANSIBLE_VERSION}` to the generated requirements copied into the bootstrap archive. This works with either profile and does not modify a source `requirements.txt`. The system architect profile still defaults Ansible and SSH to enabled; explicit values in `hermes.env` override profile defaults.
 
 For a custom override without the profile system, copy the shared layer and desired profile manually, then point `HERMES_BOOTSTRAP_DIR` at the merged result.
 
