@@ -32,7 +32,7 @@ printf '\n\n\n\nn\nn\nn\ny\n13.4.0\ny\n' | \
 [[ -f "$config_one/hermes.env" ]]
 [[ -f "$config_one/bootstrap/SOUL.md" ]]
 [[ -f "$config_one/bootstrap/config.yaml" ]]
-[[ -d "$config_one/artifacts/bootstrap-profile/personal-assistant" ]]
+[[ ! -e "$config_one/artifacts/bootstrap-profile" ]]
 [[ "$(stat -c %a "$config_one/hermes.env")" == 600 ]]
 [[ "$(stat -c %a "$answers_one")" == 600 ]]
 # shellcheck disable=SC1090
