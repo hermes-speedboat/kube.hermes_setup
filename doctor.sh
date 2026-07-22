@@ -4,6 +4,20 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${ENV_FILE:-$ROOT_DIR/hermes.env}"
 [[ -f "$ENV_FILE" ]] && { set -a; source "$ENV_FILE"; set +a; }
+HERMES_BOOTSTRAP_PROFILE="${HERMES_BOOTSTRAP_PROFILE-personal-assistant}"
+if [[ -n "$HERMES_BOOTSTRAP_PROFILE" ]]; then
+  profile_dir="$ROOT_DIR/examples/bootstrap-profiles/$HERMES_BOOTSTRAP_PROFILE"
+  profile_defaults="$profile_dir/defaults.conf"
+  if [[ -f "$profile_defaults" ]]; then
+    # shellcheck disable=SC1090
+    source "$profile_defaults"
+    HERMES_ANSIBLE_SETUP="${HERMES_ANSIBLE_SETUP-${HERMES_PROFILE_DEFAULT_ANSIBLE_SETUP:-false}}"
+    HERMES_SSH_SETUP="${HERMES_SSH_SETUP-${HERMES_PROFILE_DEFAULT_SSH_SETUP:-true}}"
+    if [[ -z "${HERMES_ADDON_REQUIREMENTS+x}" && -n "${HERMES_PROFILE_DEFAULT_ADDON_REQUIREMENTS:-}" ]]; then
+      HERMES_ADDON_REQUIREMENTS="$profile_dir/$HERMES_PROFILE_DEFAULT_ADDON_REQUIREMENTS"
+    fi
+  fi
+fi
 HERMES_NAMESPACE="${HERMES_NAMESPACE:-hermes}"
 WEBUI_HOST="${WEBUI_HOST:-}"
 DASHBOARD_HOST="${DASHBOARD_HOST:-}"
@@ -169,8 +183,10 @@ check_home_ssh() {
       fail "$app HOME/XDG are not persistent (HOME=${home:-unset}, XDG_CONFIG_HOME=${xdg_config:-unset}, XDG_CACHE_HOME=${xdg_cache:-unset})"
     fi
 
-    if [[ "$ansible_config" == "/workspace/ansible/ansible.cfg" ]]; then
+    if [[ "${HERMES_ANSIBLE_SETUP:-false}" =~ ^(1|true|TRUE|yes|YES|on|ON)$ && "$ansible_config" == "/workspace/ansible/ansible.cfg" ]]; then
       ok "$app ANSIBLE_CONFIG points to workspace config"
+    elif [[ ! "${HERMES_ANSIBLE_SETUP:-false}" =~ ^(1|true|TRUE|yes|YES|on|ON)$ && -z "$ansible_config" ]]; then
+      ok "$app ANSIBLE_CONFIG disabled for selected profile"
     else
       fail "$app ANSIBLE_CONFIG invalid (${ansible_config:-unset})"
     fi
@@ -221,6 +237,7 @@ check_addon_python_runtime() {
     else
       fail "$app uv-managed addon Python missing or broken"
     fi
+    [[ "${HERMES_ANSIBLE_SETUP:-false}" =~ ^(1|true|TRUE|yes|YES|on|ON)$ ]] || continue
     ansible_out="$(kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -c 'if [ -x /opt/data/addon-venv/bin/ansible ]; then /opt/data/addon-venv/bin/ansible --version | sed -n "1p"; fi' 2>/dev/null || true)"
     if [[ "$ansible_out" == ansible\ * ]]; then
       ok "$app addon Ansible available (${ansible_out})"

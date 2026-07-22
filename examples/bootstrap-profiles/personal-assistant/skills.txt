@@ -1,0 +1,4 @@
+# Shared skills selected for this profile. One canonical source exists under
+# examples/bootstrap-shared/skills; install.sh copies only these entries.
+markdown-pdf
+hermes-workspace-manager

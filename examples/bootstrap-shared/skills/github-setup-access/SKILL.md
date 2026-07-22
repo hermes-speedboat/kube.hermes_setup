@@ -160,12 +160,12 @@ Do not store the token in:
 
 - The repository's `hermes.env`.
 - `examples/hermes.env.example`.
-- `examples/bootstrap/` in a public checkout.
+- Any public bootstrap source under `examples/bootstrap-shared/` or `examples/bootstrap-profiles/`.
 - `/workspace`.
 - Kubernetes manifests or ConfigMaps.
 - A Git remote URL.
 
-`/opt/data/.env` is persistent and may be included in Hermes backups. Treat those backups as secrets. A copied `examples/bootstrap/` tree must not contain this real token.
+`/opt/data/.env` is persistent and may be included in Hermes backups. Treat those backups as secrets. A copied bootstrap tree must not contain this real token.
 
 This step is complete when exactly one `GITHUB_TOKEN` assignment exists in `/opt/data/.env`, the file mode is `0600`, and no token value was disclosed.
 

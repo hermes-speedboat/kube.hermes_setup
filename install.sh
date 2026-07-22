@@ -27,7 +27,8 @@ write_generated_credentials() {
 
 load_env() {
   if [[ ! -f "$ENV_FILE" ]]; then
-    fail "Missing env file: $ENV_FILE. Copy examples/hermes.env.example to hermes.env first."
+    warn "Missing env file: $ENV_FILE. Using environment variables only."
+    return 0
   fi
   set -a
   # shellcheck disable=SC1090
@@ -46,6 +47,8 @@ validate() {
 }
 
 prepare_defaults() {
+  export HERMES_BOOTSTRAP_PROFILE="${HERMES_BOOTSTRAP_PROFILE-personal-assistant}"
+  apply_profile_defaults "$HERMES_BOOTSTRAP_PROFILE"
   export HERMES_NAMESPACE="${HERMES_NAMESPACE:-hermes}"
   export INGRESS_CLASS_NAME="${INGRESS_CLASS_NAME:-traefik}"
   export TRAEFIK_ENTRYPOINT="${TRAEFIK_ENTRYPOINT:-websecure}"
@@ -68,6 +71,12 @@ prepare_defaults() {
   export HERMES_UV_DIR="/opt/data/uv"
   export HERMES_ADDON_VENV="/opt/data/addon-venv"
   export HERMES_ADDON_PYTHON_VERSION="${HERMES_ADDON_PYTHON_VERSION:-3.13}"
+  export HERMES_ANSIBLE_SETUP="${HERMES_ANSIBLE_SETUP:-false}"
+  if [[ "$HERMES_ANSIBLE_SETUP" =~ ^(1|true|TRUE|yes|YES|on|ON)$ ]]; then
+    export HERMES_ANSIBLE_CONFIG="/workspace/ansible/ansible.cfg"
+  else
+    export HERMES_ANSIBLE_CONFIG=""
+  fi
   export HERMES_SSH_SETUP="${HERMES_SSH_SETUP:-true}"
   export HERMES_SSH_GENERATE_KEY="${HERMES_SSH_GENERATE_KEY:-${HERMES_SSH_SETUP}}"
   export HERMES_SSH_KEY_TYPE="${HERMES_SSH_KEY_TYPE:-ed25519}"
@@ -117,6 +126,10 @@ prepare_defaults() {
     require_cmd tar
     [[ -d "$HERMES_BOOTSTRAP_DIR" ]] || fail "HERMES_BOOTSTRAP_DIR does not exist or is not a directory: $HERMES_BOOTSTRAP_DIR"
   fi
+  if [[ -z "$HERMES_BOOTSTRAP_DIR" && -n "$HERMES_BOOTSTRAP_PROFILE" && "$HERMES_BOOTSTRAP_MODE" != "disabled" ]]; then
+    require_cmd tar
+    compose_profile_bootstrap "$HERMES_BOOTSTRAP_PROFILE"
+  fi
   if [[ -n "$HERMES_ADDON_REQUIREMENTS" ]]; then
     require_cmd tar
     [[ -f "$HERMES_ADDON_REQUIREMENTS" ]] || fail "HERMES_ADDON_REQUIREMENTS does not exist or is not a file: $HERMES_ADDON_REQUIREMENTS"
@@ -126,6 +139,7 @@ prepare_defaults() {
   [[ "$HERMES_ADDON_VENV" = /opt/data/* ]] || fail "HERMES_ADDON_VENV must be under /opt/data for PVC persistence"
   [[ "$HERMES_ADDON_PYTHON_VERSION" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]] || fail "HERMES_ADDON_PYTHON_VERSION must look like 3.13 or 3.13.5"
   case "$HERMES_SSH_SETUP" in true|false|TRUE|FALSE|1|0|yes|no|YES|NO|on|off|ON|OFF) ;; *) fail "HERMES_SSH_SETUP must be boolean" ;; esac
+  case "$HERMES_ANSIBLE_SETUP" in true|false|TRUE|FALSE|1|0|yes|no|YES|NO|on|off|ON|OFF) ;; *) fail "HERMES_ANSIBLE_SETUP must be boolean" ;; esac
   case "$HERMES_SSH_GENERATE_KEY" in true|false|TRUE|FALSE|1|0|yes|no|YES|NO|on|off|ON|OFF) ;; *) fail "HERMES_SSH_GENERATE_KEY must be boolean" ;; esac
   case "$HERMES_SSH_KEY_TYPE" in ed25519|rsa|ecdsa) ;; *) fail "HERMES_SSH_KEY_TYPE must be one of: ed25519, rsa, ecdsa" ;; esac
   [[ "$HERMES_SSH_KEY_PATH" = /opt/data/.ssh/* ]] || fail "HERMES_SSH_KEY_PATH must be under /opt/data/.ssh for PVC persistence"
@@ -140,6 +154,61 @@ bootstrap_enabled() {
 
 addon_requirements_enabled() {
   [[ -n "${HERMES_ADDON_REQUIREMENTS:-}" ]]
+}
+
+apply_profile_defaults() {
+  [[ -n "$HERMES_BOOTSTRAP_PROFILE" ]] || return 0
+  local prof="$1"
+  local profiledir="$ROOT_DIR/examples/bootstrap-profiles/$prof"
+  [[ -d "$profiledir" ]] || fail "Unknown bootstrap profile: $prof. Available profiles: $(cd "$ROOT_DIR/examples/bootstrap-profiles" 2>/dev/null && printf '%s ' */ | tr -d '/')"
+  local defaults="$profiledir/defaults.conf"
+  [[ -f "$defaults" ]] || fail "Profile $prof is missing defaults.conf"
+  # defaults.conf is repository-controlled and may define only HERMES_PROFILE_DEFAULT_* values.
+  if grep -Ev '^[[:space:]]*(#.*|$|HERMES_PROFILE_DEFAULT_[A-Z0-9_]+=[^[:space:]]*)$' "$defaults" | grep -q .; then
+    fail "Profile $prof has invalid entries in defaults.conf"
+  fi
+  # shellcheck disable=SC1090
+  source "$defaults"
+  if [[ -z "${HERMES_SSH_SETUP+x}" ]]; then
+    export HERMES_SSH_SETUP="${HERMES_PROFILE_DEFAULT_SSH_SETUP:-true}"
+  fi
+  if [[ -z "${HERMES_ANSIBLE_SETUP+x}" ]]; then
+    export HERMES_ANSIBLE_SETUP="${HERMES_PROFILE_DEFAULT_ANSIBLE_SETUP:-false}"
+  fi
+  if [[ -z "${HERMES_ADDON_REQUIREMENTS+x}" && -n "${HERMES_PROFILE_DEFAULT_ADDON_REQUIREMENTS:-}" ]]; then
+    export HERMES_ADDON_REQUIREMENTS="$profiledir/$HERMES_PROFILE_DEFAULT_ADDON_REQUIREMENTS"
+  fi
+}
+
+compose_profile_bootstrap() {
+  local prof="$1"
+  local shared="$ROOT_DIR/examples/bootstrap-shared"
+  local shared_skills="$shared/skills"
+  local profiledir="$ROOT_DIR/examples/bootstrap-profiles/$prof"
+  [[ -f "$profiledir/SOUL.md" ]] || fail "Profile $prof is missing SOUL.md"
+  [[ -f "$profiledir/memories/USER.md" ]] || warn "Profile $prof has no memories/USER.md"
+  [[ -f "$profiledir/skills.txt" ]] || fail "Profile $prof is missing skills.txt"
+  local stage="$RENDER_DIR/bootstrap-profile/$prof"
+  rm -rf "$stage"
+  mkdir -p "$stage"
+  if [[ -d "$shared" ]]; then
+    log "Composing bootstrap profile $prof"
+    find "$shared" -mindepth 1 -maxdepth 1 ! -name skills -exec cp -a {} "$stage"/ \;
+  fi
+  mkdir -p "$stage/skills"
+  local skill
+  while IFS= read -r skill || [[ -n "$skill" ]]; do
+    skill="${skill%%#*}"
+    skill="${skill//[[:space:]]/}"
+    [[ -n "$skill" ]] || continue
+    [[ "$skill" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || fail "Invalid skill name '$skill' in profile $prof"
+    [[ -d "$shared_skills/$skill" ]] || fail "Profile $prof selects missing shared skill: $skill"
+    [[ ! -e "$stage/skills/$skill" ]] || fail "Profile $prof selects duplicate skill: $skill"
+    cp -a "$shared_skills/$skill" "$stage/skills/$skill"
+  done < "$profiledir/skills.txt"
+  cp -a "$profiledir"/. "$stage"/
+  rm -f "$stage/defaults.conf" "$stage/skills.txt" "$stage/requirements.txt"
+  export HERMES_BOOTSTRAP_DIR="$stage"
 }
 
 archive_enabled() {

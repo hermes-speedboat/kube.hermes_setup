@@ -52,8 +52,9 @@ docs/operations.md                Day-2 runbook
 docs/security.md                  Security model and secret-handling rules
 docs/troubleshooting.md           Known failure modes and fixes
 docs/codex-auth.md                Manual Codex OAuth pairing
-examples/bootstrap/skills/        Sanitized reusable bootstrap skills
-examples/bootstrap/workspace/     Example workspace-level instructions
+examples/bootstrap-shared/skills/ Shared reusable skills for all profiles
+examples/bootstrap-shared/workspace/ Shared workspace instructions
+examples/bootstrap-profiles/      Profile-specific SOUL, memories, requirements, workspace
 ```
 
 Generated/local files that must not be committed:
@@ -462,4 +463,4 @@ The Dashboard file browser is controlled by `HERMES_DASHBOARD_FILES_ROOT`, while
 
 ### Bootstrap feature
 
-`HERMES_BOOTSTRAP_DIR` packages a local directory into `.rendered/bootstrap.tar.gz` and applies it via Kubernetes Secret `hermes-bootstrap-archive`. The init job maps `SOUL.md`, `memories/`, `skills/`, `plugins/`, `cron/`, `config.yaml`, `.env`, and `workspace/` into `/opt/data` and `/workspace`. Default mode is `missing`; `overwrite` is destructive. `auth.json` is excluded unless `HERMES_BOOTSTRAP_INCLUDE_AUTH=true`. Never commit real `bootstrap/` content; only sanitized examples under `examples/bootstrap/`.
+`HERMES_BOOTSTRAP_DIR` packages a local directory into `.rendered/bootstrap.tar.gz` and applies it via Kubernetes Secret `hermes-bootstrap-archive`. `HERMES_BOOTSTRAP_PROFILE` composes one profile from `examples/bootstrap-shared/` plus its profile overlay. Each profile declares shared skill membership in `skills.txt` and environment defaults in `defaults.conf`; operator-set `HERMES_*` values override those defaults. The init job maps `SOUL.md`, `memories/`, `skills/`, `plugins/`, `cron/`, `config.yaml`, `.env`, and `workspace/` into `/opt/data` and `/workspace`. Default mode is `missing`; `overwrite` is destructive. `auth.json` is excluded unless `HERMES_BOOTSTRAP_INCLUDE_AUTH=true`. Never commit real bootstrap content; only sanitized examples under `examples/bootstrap-shared/` and `examples/bootstrap-profiles/`.
