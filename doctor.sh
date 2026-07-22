@@ -19,6 +19,8 @@ if [[ -n "$HERMES_BOOTSTRAP_PROFILE" ]]; then
   fi
 fi
 HERMES_NAMESPACE="${HERMES_NAMESPACE:-hermes}"
+HERMES_RUNTIME_UID="${HERMES_RUNTIME_UID:-10000}"
+HERMES_RUNTIME_GID="${HERMES_RUNTIME_GID:-10000}"
 WEBUI_HOST="${WEBUI_HOST:-}"
 DASHBOARD_HOST="${DASHBOARD_HOST:-}"
 
@@ -245,12 +247,51 @@ check_addon_python_runtime() {
       fail "$app addon Ansible missing or broken"
       continue
     fi
-    if kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- sh -c '/opt/data/addon-venv/bin/ansible localhost -m ping -i /workspace/ansible/inventory/hosts.ini' >/dev/null 2>&1; then
+    if kubectl -n "$HERMES_NAMESPACE" exec "$pod" -- setpriv --reuid="$HERMES_RUNTIME_UID" --regid="$HERMES_RUNTIME_GID" --clear-groups env HOME=/opt/data/home /bin/bash -l -c 'ansible localhost -m ping -i /workspace/ansible/inventory/hosts.ini' >/dev/null 2>&1; then
       ok "$app addon Ansible localhost ping"
     else
       fail "$app addon Ansible localhost ping failed"
     fi
   done
+
+  # A direct kubectl exec inherits the Pod PATH and can pass while Hermes'
+  # login-shell snapshot has already lost the addon paths. First verify the
+  # exact subprocess HOME selected by Hermes in containers.
+  if kubectl -n "$HERMES_NAMESPACE" exec deploy/hermes-webui -- setpriv --reuid="$HERMES_RUNTIME_UID" --regid="$HERMES_RUNTIME_GID" --clear-groups env HOME=/opt/data/home /bin/bash -l -c 'set -eu; test "$(command -v ansible)" = /opt/data/addon-venv/bin/ansible; test "${ANSIBLE_CONFIG:-}" = /workspace/ansible/ansible.cfg' >/dev/null 2>&1; then
+    ok "hermes-webui subprocess HOME login shell preserves addon PATH/config"
+  else
+    fail "hermes-webui subprocess HOME login shell loses addon PATH/config"
+  fi
+
+  # Exercise the installed LocalEnvironment/terminal_tool implementation used
+  # by WebUI chat turns, from outside the copied source checkout.
+  local terminal_out
+  terminal_out="$(kubectl -n "$HERMES_NAMESPACE" exec deploy/hermes-webui -- setpriv --reuid="$HERMES_RUNTIME_UID" --regid="$HERMES_RUNTIME_GID" --clear-groups env HOME=/opt/data/home /bin/bash -lc '
+    set -eu
+    cd /tmp
+    /app/venv/bin/python - <<"PY"
+import json
+import os
+from tools.terminal_tool import terminal_tool
+
+result = json.loads(terminal_tool(
+    command=(
+        "set -eu; "
+        "test \"$(command -v ansible)\" = /opt/data/addon-venv/bin/ansible; "
+        "test \"${ANSIBLE_CONFIG:-}\" = /workspace/ansible/ansible.cfg; "
+        "ansible localhost -m ping -i /workspace/ansible/inventory/hosts.ini"
+    ),
+    task_id=f"doctor-webui-addon-shell-{os.getpid()}",
+))
+print(result.get("output", ""))
+raise SystemExit(0 if result.get("exit_code") == 0 else 1)
+PY
+  ' 2>/dev/null || true)"
+  if [[ "$terminal_out" == *'"ping": "pong"'* ]]; then
+    ok "hermes-webui terminal tool preserves addon Ansible PATH/config"
+  else
+    fail "hermes-webui terminal tool cannot execute addon Ansible through its login-shell snapshot"
+  fi
 }
 
 check_dashboard_workspace_root() {
