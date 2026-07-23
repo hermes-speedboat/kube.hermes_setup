@@ -212,7 +212,7 @@ Keep the repository, `current_config/`, `configuration_answers`, backup, checksu
 kubectl delete namespace "$HERMES_NAMESPACE"
 ```
 
-Before reinstalling, put the retained `DASHBOARD_AUTH_PASSWORD`, `API_SERVER_KEY`, and enabled-component `BROWSER_TOKEN` values back into `current_config/hermes.env` and keep the file mode `0600`. Then recreate Kubernetes resources and empty PVCs:
+Before reinstalling, put the retained `DASHBOARD_AUTH_PASSWORD`, `API_SERVER_KEY`, and enabled-component `BROWSER_TOKEN` values back into `current_config/hermes.env` and keep the file mode `0600`. Then recreate the Kubernetes resources and PVC objects. Depending on the storage backend and reclaim policy, the mounted volumes may be fresh or may contain retained data; restore clears their mounted contents before extracting the backup.
 
 ```bash
 chmod 600 current_config/hermes.env
