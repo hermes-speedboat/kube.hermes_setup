@@ -129,7 +129,7 @@ It validates settings, renders the manifest, creates the namespace and Secrets, 
 current_config/artifacts/generated-credentials.txt
 ```
 
-The file is mode `0600`. Move its values to a password manager and delete it afterward. In the current release, another install with blank `DASHBOARD_AUTH_PASSWORD`, `API_SERVER_KEY`, or enabled-component `BROWSER_TOKEN` fields generates and applies new values. For stable reinstall credentials, retain explicit values in the protected `current_config/hermes.env`, reapply them after an intentional answer replay, and use `maintain.sh` for deliberate rotation.
+The file is mode `0600`. On the first installation, missing credentials are generated. On later installations, blank values reuse existing Kubernetes Secrets; explicit values override them. Move the values to a password manager and delete the file afterward. Use `maintain.sh` for deliberate rotation.
 
 If using Codex, load the generated environment and complete OAuth pairing in an interactive shell:
 
@@ -212,7 +212,7 @@ Keep the repository, `current_config/`, `configuration_answers`, backup, checksu
 kubectl delete namespace "$HERMES_NAMESPACE"
 ```
 
-Before reinstalling, put the retained `DASHBOARD_AUTH_PASSWORD`, `API_SERVER_KEY`, and enabled-component `BROWSER_TOKEN` values back into `current_config/hermes.env` and keep the file mode `0600`. Then recreate the Kubernetes resources and PVC objects. Depending on the storage backend and reclaim policy, the mounted volumes may be fresh or may contain retained data; restore clears their mounted contents before extracting the backup.
+Before reinstalling, retain the credential values separately. If the recreated namespace has no Secrets, the installer generates new values for blank settings; if Secrets are retained, blank settings reuse them. Explicitly restore known values in `current_config/hermes.env` when you require deterministic credentials across a destructive rebuild. Keep the file mode `0600`. Depending on the storage backend and reclaim policy, the mounted volumes may be fresh or may contain retained data; restore clears their mounted contents before extracting the backup.
 
 ```bash
 chmod 600 current_config/hermes.env

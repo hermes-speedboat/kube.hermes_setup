@@ -20,13 +20,15 @@ rand_hex() { openssl rand -hex "${1:-32}"; }
 write_generated_credentials() {
   mkdir -p "$RENDER_DIR"
   chmod 700 "$RENDER_DIR"
-  local out="$RENDER_DIR/generated-credentials.txt"
+  local out="$RENDER_DIR/generated-credentials.txt" tmp
+  tmp="$(mktemp "$RENDER_DIR/.generated-credentials.XXXXXX")"
+  chmod 600 "$tmp"
   {
     printf "DASHBOARD_AUTH_USER=%s\nDASHBOARD_AUTH_PASSWORD=%s\n" "$DASHBOARD_AUTH_USER" "$DASHBOARD_AUTH_PASSWORD"
     printf "API_SERVER_KEY=%s\n" "$API_SERVER_KEY"
     printf "BROWSER_TOKEN=%s\n" "$BROWSER_TOKEN"
-  } > "$out"
-  chmod 600 "$out"
+  } > "$tmp"
+  mv -f "$tmp" "$out"
 }
 
 load_env() {
@@ -49,6 +51,132 @@ prepare_paths() {
 
 is_truthy() {
   [[ "${1:-}" =~ ^(1|true|TRUE|yes|YES|on|ON)$ ]]
+}
+
+read_existing_secret_value() {
+  local secret="$1" key="$2" name encoded decoded
+  if ! name="$(kubectl -n "$HERMES_NAMESPACE" get secret "$secret" --ignore-not-found -o jsonpath='{.metadata.name}')"; then
+    warn "Unable to inspect Kubernetes Secret $secret"
+    return 2
+  fi
+  [[ -n "$name" ]] || return 1
+  if ! encoded="$(kubectl -n "$HERMES_NAMESPACE" get secret "$secret" -o "jsonpath={.data['$key']}")"; then
+    warn "Unable to read Kubernetes Secret $secret key $key"
+    return 2
+  fi
+  [[ -n "$encoded" ]] || {
+    warn "Kubernetes Secret $secret is missing required key $key"
+    return 2
+  }
+  if (( ${#encoded} % 4 != 0 )) || [[ ! "$encoded" =~ ^[A-Za-z0-9+/]+={0,2}$ ]]; then
+    warn "Kubernetes Secret $secret key $key is malformed or empty"
+    return 2
+  fi
+  if ! decoded="$(printf '%s' "$encoded" | openssl base64 -d -A 2>/dev/null)" || [[ -z "$decoded" ]]; then
+    warn "Kubernetes Secret $secret key $key is malformed or empty"
+    return 2
+  fi
+  printf '%s' "$decoded"
+}
+
+resolve_runtime_credentials() {
+  local namespace_exists existing status need_lookup=false
+  local dashboard_enabled="${HERMES_DASHBOARD_ENABLED:-true}"
+  local webui_enabled="${HERMES_WEBUI_ENABLED:-true}"
+  local browser_enabled="${HERMES_BROWSER_ENABLED:-true}"
+  CREDENTIAL_SOURCE_DASHBOARD="explicit"
+  CREDENTIAL_SOURCE_API="explicit"
+  CREDENTIAL_SOURCE_BROWSER="explicit"
+
+  [[ -n "${DASHBOARD_AUTH_PASSWORD:-}" ]] || CREDENTIAL_SOURCE_DASHBOARD=""
+  [[ -n "${API_SERVER_KEY:-}" ]] || CREDENTIAL_SOURCE_API=""
+  [[ -n "${BROWSER_TOKEN:-}" ]] || CREDENTIAL_SOURCE_BROWSER=""
+
+  if { is_truthy "$dashboard_enabled" || is_truthy "$webui_enabled"; } && [[ -z "${DASHBOARD_AUTH_PASSWORD:-}" ]]; then
+    need_lookup=true
+  fi
+  [[ -n "${API_SERVER_KEY:-}" ]] || need_lookup=true
+  if is_truthy "$browser_enabled" && [[ -z "${BROWSER_TOKEN:-}" ]]; then
+    need_lookup=true
+  fi
+
+  if [[ "$need_lookup" == false ]]; then
+    [[ ${#API_SERVER_KEY} -ge 16 ]] || fail "API_SERVER_KEY must be at least 16 characters"
+    if is_truthy "$browser_enabled"; then
+      BROWSER_CDP_URL="ws://hermes-browser:3000/chromium?token=${BROWSER_TOKEN}"
+    else
+      BROWSER_CDP_URL=""
+    fi
+    export DASHBOARD_AUTH_USER DASHBOARD_AUTH_PASSWORD API_SERVER_KEY BROWSER_TOKEN BROWSER_CDP_URL
+    return 0
+  fi
+
+  require_cmd kubectl
+  require_cmd openssl
+  if ! namespace_exists="$(kubectl get namespace "$HERMES_NAMESPACE" --ignore-not-found -o jsonpath='{.metadata.name}')"; then
+    fail "Unable to inspect namespace $HERMES_NAMESPACE; refusing to generate replacement credentials"
+  fi
+
+  if [[ -n "$namespace_exists" ]]; then
+    if [[ -z "${DASHBOARD_AUTH_PASSWORD:-}" ]] && { is_truthy "$dashboard_enabled" || is_truthy "$webui_enabled"; }; then
+      status=0
+      existing="$(read_existing_secret_value hermes-dashboard-auth password)" || status=$?
+      case "$status" in
+        0) DASHBOARD_AUTH_PASSWORD="$existing"; CREDENTIAL_SOURCE_DASHBOARD=reused ;;
+        1) DASHBOARD_AUTH_PASSWORD="$(rand_hex 18)"; CREDENTIAL_SOURCE_DASHBOARD=generated ;;
+        *) fail "Unable to safely resolve Dashboard/WebUI credentials" ;;
+      esac
+      if [[ "${DASHBOARD_AUTH_USER_EXPLICIT:-false}" != true && "$CREDENTIAL_SOURCE_DASHBOARD" == reused ]]; then
+        status=0
+        existing="$(read_existing_secret_value hermes-dashboard-auth username)" || status=$?
+        [[ "$status" -eq 0 ]] || fail "Unable to safely reuse Dashboard/WebUI username"
+        DASHBOARD_AUTH_USER="$existing"
+      fi
+    fi
+    if [[ -z "${API_SERVER_KEY:-}" ]]; then
+      status=0
+      existing="$(read_existing_secret_value hermes-api-server api-key)" || status=$?
+      case "$status" in
+        0) API_SERVER_KEY="$existing"; CREDENTIAL_SOURCE_API=reused ;;
+        1) API_SERVER_KEY="$(rand_hex 32)"; CREDENTIAL_SOURCE_API=generated ;;
+        *) fail "Unable to safely resolve API server key" ;;
+      esac
+    fi
+    if is_truthy "$browser_enabled" && [[ -z "${BROWSER_TOKEN:-}" ]]; then
+      status=0
+      existing="$(read_existing_secret_value hermes-browser-token token)" || status=$?
+      case "$status" in
+        0) BROWSER_TOKEN="$existing"; CREDENTIAL_SOURCE_BROWSER=reused ;;
+        1) BROWSER_TOKEN="$(rand_hex 32)"; CREDENTIAL_SOURCE_BROWSER=generated ;;
+        *) fail "Unable to safely resolve Browserless token" ;;
+      esac
+    fi
+  else
+    if [[ -z "${DASHBOARD_AUTH_PASSWORD:-}" ]] && { is_truthy "$dashboard_enabled" || is_truthy "$webui_enabled"; }; then
+      DASHBOARD_AUTH_PASSWORD="$(rand_hex 18)"
+      CREDENTIAL_SOURCE_DASHBOARD=generated
+    fi
+    if [[ -z "${API_SERVER_KEY:-}" ]]; then
+      API_SERVER_KEY="$(rand_hex 32)"
+      CREDENTIAL_SOURCE_API=generated
+    fi
+    if is_truthy "$browser_enabled"; then
+      if [[ -z "${BROWSER_TOKEN:-}" ]]; then
+        BROWSER_TOKEN="$(rand_hex 32)"
+        CREDENTIAL_SOURCE_BROWSER=generated
+      fi
+    else
+      BROWSER_TOKEN=""
+    fi
+  fi
+
+  [[ ${#API_SERVER_KEY} -ge 16 ]] || fail "API_SERVER_KEY must be at least 16 characters"
+  if is_truthy "$browser_enabled"; then
+    BROWSER_CDP_URL="ws://hermes-browser:3000/chromium?token=${BROWSER_TOKEN}"
+  else
+    BROWSER_CDP_URL=""
+  fi
+  export DASHBOARD_AUTH_USER DASHBOARD_AUTH_PASSWORD API_SERVER_KEY BROWSER_TOKEN BROWSER_CDP_URL
 }
 
 enabled_deployments() {
@@ -141,19 +269,20 @@ prepare_defaults() {
   export MODEL_PROVIDER="${MODEL_PROVIDER:-codex}"
   export MODEL_NAME="${MODEL_NAME:-gpt-5.6-luna}"
   if is_truthy "$HERMES_DASHBOARD_ENABLED" || is_truthy "$HERMES_WEBUI_ENABLED"; then
+    if [[ -n "${DASHBOARD_AUTH_USER:-}" ]]; then
+      export DASHBOARD_AUTH_USER_EXPLICIT=true
+    else
+      export DASHBOARD_AUTH_USER_EXPLICIT=false
+    fi
     export DASHBOARD_AUTH_USER="${DASHBOARD_AUTH_USER:-admin}"
-    export DASHBOARD_AUTH_PASSWORD="${DASHBOARD_AUTH_PASSWORD:-$(rand_hex 18)}"
+    export DASHBOARD_AUTH_PASSWORD="${DASHBOARD_AUTH_PASSWORD:-}"
   else
     export DASHBOARD_AUTH_USER=""
     export DASHBOARD_AUTH_PASSWORD=""
   fi
-  export API_SERVER_KEY="${API_SERVER_KEY:-$(rand_hex 32)}"
-  if [[ ${#API_SERVER_KEY} -lt 16 ]]; then
-    warn "API_SERVER_KEY is shorter than 16 characters; generating a strong key instead."
-    export API_SERVER_KEY="$(rand_hex 32)"
-  fi
+  export API_SERVER_KEY="${API_SERVER_KEY:-}"
   if is_truthy "$HERMES_BROWSER_ENABLED"; then
-    export BROWSER_TOKEN="${BROWSER_TOKEN:-$(rand_hex 32)}"
+    export BROWSER_TOKEN="${BROWSER_TOKEN:-}"
   else
     export BROWSER_TOKEN=""
   fi
@@ -167,7 +296,7 @@ prepare_defaults() {
     warn "BROWSER_CONCURRENT=$BROWSER_CONCURRENT is below the repo default 4; parallel WebUI screenshot/browser workflows can queue and time out during CDP handshakes."
   fi
   if is_truthy "$HERMES_BROWSER_ENABLED"; then
-    export BROWSER_CDP_URL="ws://hermes-browser:3000/chromium?token=${BROWSER_TOKEN}"
+    export BROWSER_CDP_URL=""
   else
     export BROWSER_CDP_URL=""
   fi
@@ -461,11 +590,12 @@ main() {
   load_env
   prepare_paths
   prepare_defaults
+  resolve_runtime_credentials
   validate
   create_bootstrap_archive
   render_manifest
-  write_generated_credentials
   create_namespace_and_secrets
+  write_generated_credentials
   apply_and_wait
   print_summary
 }

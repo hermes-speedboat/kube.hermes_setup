@@ -136,6 +136,10 @@ grep -qx 'model: openai/gpt-5.6' "$config_two/bootstrap/config.yaml"
   source "$ROOT_DIR/install.sh"
   prepare_paths
   prepare_defaults
+  DASHBOARD_AUTH_PASSWORD='test-dashboard-password'
+  API_SERVER_KEY='test-api-key-long-enough'
+  BROWSER_TOKEN='test-browser-token'
+  resolve_runtime_credentials
   write_generated_credentials
   credentials="$config_two/artifacts/generated-credentials.txt"
   [[ -f "$credentials" ]]

@@ -80,7 +80,7 @@ current_config/artifacts/generated-credentials.txt
 
 The path follows `HERMES_RENDER_DIR`; manual installations default to `.rendered/generated-credentials.txt`. The directory is mode `0700` and the file is mode `0600`. The file contains `DASHBOARD_AUTH_USER`, `DASHBOARD_AUTH_PASSWORD`, `API_SERVER_KEY`, and `BROWSER_TOKEN`; values for disabled components may be empty.
 
-Every installer run generates a new value for each still-empty secret variable, applies it to Kubernetes, and overwrites the capture file with the current applied values. Save required values in a password manager. If the local file was deleted, an authorized operator can recover the Dashboard/WebUI password from `secret/hermes-dashboard-auth`; avoid printing or sharing it except in a private terminal.
+On the first installation, missing credentials are generated. On later installations, blank values reuse existing Kubernetes Secrets; explicit non-empty values override them. Kubernetes lookup or malformed-Secret errors fail closed rather than rotating credentials implicitly. Use the maintenance rotation commands for deliberate changes. Save required values in a password manager. If the local file was deleted, an authorized operator can recover the Dashboard/WebUI password from `secret/hermes-dashboard-auth`; avoid printing or sharing it except in a private terminal.
 
 Use `HERMES_BOOTSTRAP_DIR` to seed SOUL, memory, skills, plugins, cron jobs, config, and workspace context into the persistent PVCs. This is useful for repeatable installations where the Agent should start with known behavior.
 
