@@ -20,6 +20,9 @@ All notable changes to this project are documented in this file.
 - Updates the bootstrap workspace instructions, SOUL profile, README, and post-setup guidance to describe the combined workspace lifecycle.
 - Makes `personal-assistant` select `markdown-pdf` and `hermes-workspace-manager` without duplicating canonical skill sources, disable SSH setup by default, and activate its own addon requirements.
 - Makes `universal-system-architect` select all shared skills, enable SSH setup, and activate its Ansible-oriented addon requirements by default.
+- Simplifies README from 506 lines to ~200 lines around the canonical `configure.sh` → customize `current_config` → `install.sh` workflow.
+- Adds section headers and inline comments to `examples/hermes.env.example` for production readability.
+- Consolidates `POST_SETUP.md` into the README profiles section and removes the standalone file.
 
 ### Fixed
 
