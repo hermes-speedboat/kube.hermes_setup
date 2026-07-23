@@ -2,7 +2,7 @@
 
 ## Generated Dashboard/WebUI password cannot be found
 
-If the wizard password prompt was left empty, the question phase does not store a password in `current_config/hermes.env` or `configuration_answers`. `install.sh` generates and applies it later. For a wizard installation, check:
+If the wizard password prompt was left empty, the question phase does not store a password in `current_config/hermes.env` or `configuration_answers`. On the first installation, `install.sh` generates and applies it; on later installations it reuses the existing Kubernetes Secret. For a wizard installation, check:
 
 ```bash
 stat -c '%a %n' current_config/artifacts/generated-credentials.txt
@@ -16,7 +16,7 @@ Do not post the file contents. Move required values to a password manager. If th
 kubectl -n <namespace> get secret hermes-dashboard-auth -o jsonpath='{.data.password}' | base64 -d; printf '\n'
 ```
 
-If both Dashboard and WebUI are disabled, no application password is generated and the `DASHBOARD_AUTH_PASSWORD` entry in the capture file is empty. If an empty password remains configured, each installer rerun generates a new value and overwrites the capture file with the currently applied value.
+If both Dashboard and WebUI are disabled, no application password is generated and the `DASHBOARD_AUTH_PASSWORD` entry in the capture file is empty. Use `maintain.sh rotate-passwords` for deliberate password changes.
 
 ## WebUI loads but chat fails with `AIAgent not available`
 
@@ -234,7 +234,7 @@ Symptom in `hermes-agent` logs:
 API_SERVER_KEY is a placeholder or too short (<16 chars)
 ```
 
-Cause: a weak `API_SERVER_KEY` was inherited from the environment or env file. Current `install.sh` generates a strong replacement when the value is shorter than 16 characters. Rerun `./install.sh` and wait for `deploy/hermes-agent` to roll out.
+Cause: a weak `API_SERVER_KEY` was inherited from the environment or env file, or an existing Kubernetes Secret contains a weak key. `install.sh` rejects a final value shorter than 16 characters instead of silently replacing an existing credential. Set an explicit strong key and rerun `./install.sh`.
 
 ### Dashboard `/files` returns `403: Path outside managed files root`
 

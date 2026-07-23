@@ -69,7 +69,7 @@ The scripts avoid passing plaintext passwords as command-line arguments to `open
 
 ## Local generated credential files
 
-`install.sh` writes `$HERMES_RENDER_DIR/generated-credentials.txt` with mode `0600` so operators can save generated initial values before deleting the file. Wizard installations use `current_config/artifacts`; manual installations default to `.rendered`. The file is created only when the installer runs, not when the wizard questions finish.
+`install.sh` writes the effective applied values to `$HERMES_RENDER_DIR/generated-credentials.txt` with mode `0600` so operators can save initial values before deleting the file. Wizard installations use `current_config/artifacts`; manual installations default to `.rendered`. On later installs, blank values reuse existing Kubernetes Secrets; explicit values override them. The file is written after Secret application, not when the wizard questions finish.
 
 `maintain.sh rotate-passwords --generate` writes `$HERMES_RENDER_DIR/rotated-credentials-*.txt` with mode `0600` for the same reason. Interactive rotation prompts by default and does not silently reuse password values from `hermes.env`; use `--from-env` explicitly for CI/env-driven changes.
 
@@ -101,7 +101,7 @@ The WebUI password is therefore the same value as `DASHBOARD_AUTH_PASSWORD`. `HE
 
 ## API server key length
 
-Hermes Agent refuses to start the API server when `API_SERVER_KEY` is a placeholder or shorter than 16 characters. `install.sh` therefore generates a strong replacement if a too-short value is inherited from the environment. Use a high-entropy value such as `openssl rand -hex 32` for explicit production configuration.
+Hermes Agent refuses to start the API server when `API_SERVER_KEY` is a placeholder or shorter than 16 characters. `install.sh` requires the final explicit, reused, or generated value to be at least 16 characters. Use a high-entropy value such as `openssl rand -hex 32` for explicit production configuration.
 
 ## Bootstrap data
 
