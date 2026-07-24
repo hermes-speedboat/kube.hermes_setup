@@ -118,6 +118,7 @@ source "$config_two/hermes.env"
 [[ "$WEBUI_HOST" == chat.example.com ]]
 [[ "$DASHBOARD_HOST" == admin.example.com ]]
 [[ "$DASHBOARD_AUTH_USER" == operator ]]
+DASHBOARD_AUTH_PASSWORD="${DASHBOARD_AUTH_PASSWORD:-}"
 [[ -z "$DASHBOARD_AUTH_PASSWORD" ]]
 [[ "$HERMES_ANSIBLE_SETUP" == false ]]
 [[ "$HERMES_SSH_SETUP" == false ]]

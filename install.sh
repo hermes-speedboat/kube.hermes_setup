@@ -27,6 +27,10 @@ warn() { printf '\033[1;33mWARN:\033[0m %s\n' "$*" >&2; }
 fail() { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 require_cmd() { command -v "$1" >/dev/null 2>&1 || fail "Missing required command: $1"; }
 rand_hex() { openssl rand -hex "${1:-32}"; }
+remove_local_credential_captures() {
+  rm -f "$RENDER_DIR/generated-credentials.txt" "$RENDER_DIR"/.generated-credentials.*
+  rm -f "$RENDER_DIR"/rotated-credentials-*.txt
+}
 
 load_env() {
   if [[ ! -f "$ENV_FILE" ]]; then
@@ -600,6 +604,7 @@ EOF
 main() {
   load_env
   prepare_paths
+  remove_local_credential_captures
   prepare_defaults
   resolve_runtime_credentials
   validate

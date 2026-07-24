@@ -139,6 +139,10 @@ run_resolver fresh
 grep -qx 'dashboard=generated api=generated browser=generated' "$TMP_DIR/fresh.sources"
 ! compgen -G "$TMP_DIR/render-fresh/generated-credentials.txt" >/dev/null
 ! compgen -G "$TMP_DIR/render-fresh/.generated-credentials.*" >/dev/null
+touch "$TMP_DIR/render-fresh/generated-credentials.txt" "$TMP_DIR/render-fresh/rotated-credentials-old.txt"
+HERMES_INSTALL_LIB_ONLY=true HERMES_RENDER_DIR="$TMP_DIR/render-fresh" bash -c 'source "$1"; prepare_paths; remove_local_credential_captures' _ "$ROOT_DIR/install.sh"
+! compgen -G "$TMP_DIR/render-fresh/generated-credentials.txt" >/dev/null
+! compgen -G "$TMP_DIR/render-fresh/rotated-credentials-*.txt" >/dev/null
 
 # Existing Secrets: blank configuration reuses values without exposing them.
 reset_state

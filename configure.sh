@@ -257,7 +257,6 @@ write_setting "$ENV_OUT" HERMES_BROWSER_ENABLED "$HERMES_BROWSER_ENABLED"
 write_setting "$ENV_OUT" WEBUI_HOST "$WEBUI_HOST"
 write_setting "$ENV_OUT" DASHBOARD_HOST "$DASHBOARD_HOST"
 write_setting "$ENV_OUT" DASHBOARD_AUTH_USER "$DASHBOARD_AUTH_USER"
-write_setting "$ENV_OUT" DASHBOARD_AUTH_PASSWORD "$DASHBOARD_AUTH_PASSWORD"
 write_setting "$ENV_OUT" MODEL_PROVIDER "$MODEL_PROVIDER"
 write_setting "$ENV_OUT" MODEL_NAME "$MODEL_NAME"
 write_setting "$ENV_OUT" HERMES_BOOTSTRAP_PROFILE "$HERMES_BOOTSTRAP_PROFILE"
@@ -306,7 +305,7 @@ printf '  SSH keys:    %s\n\n' "$HERMES_SSH_SETUP"
 
 installer_cmd="HERMES_INSTALL_LIB_ONLY=false ENV_FILE=$(printf '%q' "$ENV_OUT") $(printf '%q' "$ROOT_DIR/install.sh")"
 if [[ "$RUN_INSTALLER" == true ]] && ask_yes_no 'Run install.sh now?' false; then
-  HERMES_INSTALL_LIB_ONLY=false ENV_FILE="$ENV_OUT" "$ROOT_DIR/install.sh"
+  HERMES_INSTALL_LIB_ONLY=false ENV_FILE="$ENV_OUT" DASHBOARD_AUTH_PASSWORD="$DASHBOARD_AUTH_PASSWORD" "$ROOT_DIR/install.sh"
 else
   printf 'Run the installer with:\n  %s\n' "$installer_cmd"
 fi
