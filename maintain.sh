@@ -83,9 +83,10 @@ upgrade() {
 }
 
 backup() {
-  local out="${1:-}"
+  local out="${1:-}" checksum
   [[ -n "$out" ]] || fail "backup path required"
   mkdir -p "$(dirname "$out")"
+  checksum="${out}.sha256"
   kubectl -n "$HERMES_NAMESPACE" delete pod hermes-backup --ignore-not-found=true --wait=true >/dev/null 2>&1 || true
   cat <<JSON | kubectl apply -f - >/dev/null
 apiVersion: v1
@@ -113,11 +114,14 @@ spec:
       claimName: hermes-workspace
 JSON
   kubectl -n "$HERMES_NAMESPACE" wait --for=condition=Ready pod/hermes-backup --timeout=120s >/dev/null
-  kubectl -n "$HERMES_NAMESPACE" exec hermes-backup -- sh -c 'tar czf /tmp/hermes-backup.tgz -C / opt/data workspace'
+  kubectl -n "$HERMES_NAMESPACE" exec hermes-backup -- sh -c 'umask 077; tar czf /tmp/hermes-backup.tgz -C / opt/data workspace; chmod 600 /tmp/hermes-backup.tgz'
   kubectl -n "$HERMES_NAMESPACE" cp hermes-backup:/tmp/hermes-backup.tgz "$out" -c backup >/dev/null
+  chmod 600 "$out"
   kubectl -n "$HERMES_NAMESPACE" delete pod hermes-backup --ignore-not-found=true --wait=true >/dev/null
-  sha256sum "$out"
-  ls -lh "$out"
+  sha256sum "$out" > "$checksum"
+  chmod 600 "$checksum"
+  sha256sum -c "$checksum"
+  ls -lh "$out" "$checksum"
 }
 
 restore() {

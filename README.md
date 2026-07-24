@@ -188,9 +188,10 @@ Before destructive operations:
 mkdir -p backups
 backup="./backups/hermes-$(date -u +%Y%m%dT%H%M%SZ).tgz"
 ./maintain.sh backup "$backup"
+# maintain.sh creates and protects the matching .sha256 file.
 tar -tzf "$backup" >/dev/null
-sha256sum "$backup" > "$backup.sha256"
 sha256sum -c "$backup.sha256"
+stat -c '%a %n' "$backup" "$backup.sha256"  # both must be 600
 ```
 
 The archive contains both PVC filesystems:

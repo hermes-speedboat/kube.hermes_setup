@@ -59,7 +59,7 @@ Terminate TLS at your Ingress controller. This template supports Ingress TLS ref
 
 ## Backups
 
-Backups include OAuth state and possibly user/session data. Store them encrypted and restrict access.
+Backups include OAuth state and possibly user/session data. Store them encrypted and restrict access. `maintain.sh backup` creates both the archive and its SHA-256 checksum with mode `0600`.
 
 ## Password policy
 
