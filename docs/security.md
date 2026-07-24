@@ -12,8 +12,9 @@ Never commit:
 - OAuth files such as `auth.json`
 - tokens/passwords/API keys
 
-The repository `.gitignore` excludes the common local files, but operators are still responsible for review before commit.
+Environment files are parsed as non-executable `KEY=value` data. Comments, blank lines, and shell-style quoting are supported; command substitutions, function definitions, and unsafe shell control variables are not executed or accepted. Use literal values in `hermes.env` rather than shell expressions such as `${...}`.
 
+The repository `.gitignore` excludes the common local files, but operators are still responsible for review before commit.
 ## Container security contexts
 
 All workload Pods disable automatic Kubernetes ServiceAccount-token mounting and use the `RuntimeDefault` seccomp profile. The running application containers also set `allowPrivilegeEscalation: false`.

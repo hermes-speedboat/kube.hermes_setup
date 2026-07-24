@@ -37,10 +37,42 @@ load_env() {
     warn "Missing env file: $ENV_FILE. Using environment variables only."
     return 0
   fi
-  set -a
-  # shellcheck disable=SC1090
-  source "$ENV_FILE"
-  set +a
+  require_cmd python3
+  require_cmd base64
+  local key encoded value parsed
+  if ! parsed="$(python3 - "$ENV_FILE" <<'PY'
+import base64, shlex, sys
+path = sys.argv[1]
+try:
+    with open(path, encoding="utf-8") as stream:
+        for number, line in enumerate(stream, 1):
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            try:
+                fields = shlex.split(stripped, comments=True, posix=True)
+            except ValueError as exc:
+                raise SystemExit(f"invalid environment syntax at line {number}: {exc}")
+            if len(fields) != 1 or "=" not in fields[0]:
+                raise SystemExit(f"invalid environment assignment at line {number}")
+            key, value = fields[0].split("=", 1)
+            if not key or not (key[0].isalpha() or key[0] == "_") or not all(c.isalnum() or c == "_" for c in key):
+                raise SystemExit(f"invalid environment variable name at line {number}")
+            if key in {"BASH_ENV", "ENV", "CDPATH", "PATH", "SHELLOPTS", "BASHOPTS", "GLOBIGNORE", "PYTHONPATH", "PYTHONINSPECT"} or key.startswith("LD_"):
+                raise SystemExit(f"unsafe environment variable at line {number}")
+            print(f"{key}\t{base64.b64encode(value.encode()).decode()}")
+except OSError as exc:
+    raise SystemExit(f"unable to read environment file: {exc}")
+PY
+)"; then
+    fail "Unable to parse environment file $ENV_FILE"
+  fi
+  while IFS=$'\t' read -r key encoded; do
+    [[ -n "$key" ]] || continue
+    value="$(printf '%s' "$encoded" | base64 -d)" || fail "Unable to decode environment setting $key"
+    printf -v "$key" '%s' "$value"
+    export "$key"
+  done <<< "$parsed"
   [[ -z "$PROCESS_DASHBOARD_AUTH_USER_SET" ]] || DASHBOARD_AUTH_USER="$PROCESS_DASHBOARD_AUTH_USER"
   [[ -z "$PROCESS_DASHBOARD_AUTH_PASSWORD_SET" ]] || DASHBOARD_AUTH_PASSWORD="$PROCESS_DASHBOARD_AUTH_PASSWORD"
   [[ -z "$PROCESS_API_SERVER_KEY_SET" ]] || API_SERVER_KEY="$PROCESS_API_SERVER_KEY"
