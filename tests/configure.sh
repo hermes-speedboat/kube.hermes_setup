@@ -33,6 +33,8 @@ done
 grep -Fq 'chown -R ${HERMES_RUNTIME_UID}:${HERMES_RUNTIME_GID} /opt/data /workspace' "$ROOT_DIR/maintain.sh"
 ! grep -Fq 'chown -R 1000:1000' "$ROOT_DIR/maintain.sh"
 grep -Fq 'find /opt/data /workspace -mindepth 1 -maxdepth 1 -exec rm -rf {} +' "$ROOT_DIR/maintain.sh"
+! grep -Fq -- '--from-literal' "$ROOT_DIR/maintain.sh"
+grep -Fq 'from-file=token=' "$ROOT_DIR/maintain.sh"
 touch "$fallback_root/hermes.env"
 resolved_env="$(HERMES_INSTALL_LIB_ONLY=true bash -c 'source "$1/install.sh"; printf "%s" "$ENV_FILE"' _ "$fallback_root")"
 [[ "$resolved_env" == "$fallback_root/hermes.env" ]]

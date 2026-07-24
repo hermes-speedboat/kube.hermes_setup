@@ -37,6 +37,7 @@ All notable changes to this project are documented in this file.
 - Makes restore remove hidden as well as visible PVC entries and reapplies the configured runtime UID/GID instead of hard-coded `1000:1000` ownership.
 - Adds image-specific Kubernetes security contexts: RuntimeDefault seccomp and disabled ServiceAccount-token automounting for all workloads; no privilege escalation for application containers; numeric non-root Browserless with all capabilities dropped.
 - Adds a live-tested security exception for current Agent/Dashboard/WebUI root-start initialization and privileged init-container volume preparation.
+- Moves Browserless token rotation from `kubectl --from-literal` process arguments to mode-restricted temporary files passed with `--from-file`, with cleanup traps.
 - Ensures the wizard offers configurable Agent, WebUI, and Browserless image references while retaining `latest` as the default.
 - Ensures the wizard and installer never store or print plaintext credentials; successful operations provide Kubernetes Secret extraction commands instead.
 - Corrects credential, render, and bootstrap artifact paths throughout the documentation for both wizard and manual installations.

@@ -323,11 +323,23 @@ EOF
 }
 rotate_browser_token() {
   is_truthy "$HERMES_BROWSER_ENABLED" || fail "Browser component is disabled"
-  local token="${BROWSER_TOKEN:-$(rand_hex 32)}" deployments=() d
+  local token="${BROWSER_TOKEN:-$(rand_hex 32)}" deployments=() d tmpdir
   mapfile -t deployments < <(enabled_deployments)
   local cdp="ws://hermes-browser:3000/chromium?token=${token}"
-  kubectl -n "$HERMES_NAMESPACE" create secret generic hermes-browser-token --from-literal=token="$token" --dry-run=client -o yaml | kubectl apply -f -
-  kubectl -n "$HERMES_NAMESPACE" create secret generic hermes-browser-cdp --from-literal=BROWSER_CDP_URL="$cdp" --dry-run=client -o yaml | kubectl apply -f -
+  tmpdir="$(mktemp -d -t hermes-browser-token.XXXXXX)"
+  chmod 700 "$tmpdir"
+  trap 'rm -rf -- "$tmpdir"' RETURN
+  printf '%s' "$token" > "$tmpdir/token"
+  printf '%s' "$cdp" > "$tmpdir/BROWSER_CDP_URL"
+  chmod 600 "$tmpdir/token" "$tmpdir/BROWSER_CDP_URL"
+  kubectl -n "$HERMES_NAMESPACE" create secret generic hermes-browser-token \
+    --from-file=token="$tmpdir/token" \
+    --dry-run=client -o yaml | kubectl apply -f -
+  kubectl -n "$HERMES_NAMESPACE" create secret generic hermes-browser-cdp \
+    --from-file=BROWSER_CDP_URL="$tmpdir/BROWSER_CDP_URL" \
+    --dry-run=client -o yaml | kubectl apply -f -
+  trap - RETURN
+  rm -rf -- "$tmpdir"
   kubectl -n "$HERMES_NAMESPACE" rollout restart "${deployments[@]/#/deploy/}"
   for d in "${deployments[@]}"; do
     kubectl -n "$HERMES_NAMESPACE" rollout status "deploy/$d" --timeout=600s
