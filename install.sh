@@ -495,13 +495,15 @@ create_namespace_and_secrets() {
     local dash_tmpdir
     dash_tmpdir="$(mktemp -d)"
     chmod 700 "$dash_tmpdir"
+    trap 'rm -rf -- "$dash_tmpdir"' ERR
     printf '%s' "$DASHBOARD_AUTH_USER" > "$dash_tmpdir/username"
     printf '%s' "$DASHBOARD_AUTH_PASSWORD" > "$dash_tmpdir/password"
     kubectl -n "$HERMES_NAMESPACE" create secret generic hermes-dashboard-auth \
       --from-file=username="$dash_tmpdir/username" \
       --from-file=password="$dash_tmpdir/password" \
       --dry-run=client -o yaml | kubectl apply -f -
-    rm -rf "$dash_tmpdir"
+    trap - ERR
+    rm -rf -- "$dash_tmpdir"
   else
     kubectl -n "$HERMES_NAMESPACE" delete secret hermes-dashboard-auth --ignore-not-found=true >/dev/null
   fi
@@ -509,6 +511,7 @@ create_namespace_and_secrets() {
   local secret_tmpdir
   secret_tmpdir="$(mktemp -d)"
   chmod 700 "$secret_tmpdir"
+  trap 'rm -rf -- "$secret_tmpdir"' ERR
   printf '%s' "$API_SERVER_KEY" > "$secret_tmpdir/api-key"
   printf '%s' "$BROWSER_TOKEN" > "$secret_tmpdir/token"
   printf '%s' "$BROWSER_CDP_URL" > "$secret_tmpdir/BROWSER_CDP_URL"
@@ -528,7 +531,8 @@ create_namespace_and_secrets() {
   kubectl -n "$HERMES_NAMESPACE" create secret generic hermes-browser-cdp \
     --from-file=BROWSER_CDP_URL="$secret_tmpdir/BROWSER_CDP_URL" \
     --dry-run=client -o yaml | kubectl apply -f -
-  rm -rf "$secret_tmpdir"
+  trap - ERR
+  rm -rf -- "$secret_tmpdir"
 }
 
 apply_and_wait() {

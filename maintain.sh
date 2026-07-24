@@ -233,13 +233,15 @@ apply_dashboard_auth_secret() {
   local user="$1" pass="$2" tmpdir
   tmpdir="$(mktemp -d)"
   chmod 700 "$tmpdir"
+  trap 'rm -rf -- "$tmpdir"' ERR
   printf '%s' "$user" > "$tmpdir/username"
   printf '%s' "$pass" > "$tmpdir/password"
   kubectl -n "$HERMES_NAMESPACE" create secret generic hermes-dashboard-auth \
     --from-file=username="$tmpdir/username" \
     --from-file=password="$tmpdir/password" \
     --dry-run=client -o yaml | kubectl apply -f -
-  rm -rf "$tmpdir"
+  trap - ERR
+  rm -rf -- "$tmpdir"
 }
 
 rotate_passwords() {
@@ -328,7 +330,7 @@ rotate_browser_token() {
   local cdp="ws://hermes-browser:3000/chromium?token=${token}"
   tmpdir="$(mktemp -d -t hermes-browser-token.XXXXXX)"
   chmod 700 "$tmpdir"
-  trap 'rm -rf -- "$tmpdir"' RETURN
+  trap 'rm -rf -- "$tmpdir"' ERR
   printf '%s' "$token" > "$tmpdir/token"
   printf '%s' "$cdp" > "$tmpdir/BROWSER_CDP_URL"
   chmod 600 "$tmpdir/token" "$tmpdir/BROWSER_CDP_URL"
@@ -338,7 +340,7 @@ rotate_browser_token() {
   kubectl -n "$HERMES_NAMESPACE" create secret generic hermes-browser-cdp \
     --from-file=BROWSER_CDP_URL="$tmpdir/BROWSER_CDP_URL" \
     --dry-run=client -o yaml | kubectl apply -f -
-  trap - RETURN
+  trap - ERR
   rm -rf -- "$tmpdir"
   kubectl -n "$HERMES_NAMESPACE" rollout restart "${deployments[@]/#/deploy/}"
   for d in "${deployments[@]}"; do
