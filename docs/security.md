@@ -14,6 +14,18 @@ Never commit:
 
 The repository `.gitignore` excludes the common local files, but operators are still responsible for review before commit.
 
+## Container security contexts
+
+All workload Pods disable automatic Kubernetes ServiceAccount-token mounting and use the `RuntimeDefault` seccomp profile. The running application containers also set `allowPrivilegeEscalation: false`.
+
+The contexts are intentionally image-specific:
+
+- Browserless runs as numeric UID/GID `999` (`blessuser`), drops all Linux capabilities, and remains `runAsNonRoot`.
+- Hermes Agent, Dashboard, and WebUI retain their current root-startable container behavior because the upstream s6/WebUI startup paths perform UID/GID and persistent-volume initialization before starting application services.
+- Their init containers retain the privileges required for `chown`, `chmod`, SSH-key setup, and addon-runtime preparation.
+
+Do not turn this into a Pod-wide `runAsNonRoot`, `readOnlyRootFilesystem`, or `drop: [ALL]` policy without rebuilding and testing the images. The live acceptance checks must cover Hermes CLI, addon Python/YAML, Ansible localhost ping, SSH permissions, WebUI health, and Browserless CDP/WebSocket behavior.
+
 ## Browserless/CDP
 
 Browserless is powerful: it can fetch websites from inside your cluster. This repository therefore:
