@@ -124,6 +124,16 @@ assert_failed() {
   ! grep -Eq 'create|apply' "$TMP_DIR/state/calls"
 }
 
+# Explicit process-environment credentials survive loading a blank env file.
+printf '%s\n' 'DASHBOARD_AUTH_PASSWORD=' 'API_SERVER_KEY=' 'BROWSER_TOKEN=' > "$TMP_DIR/blank.env"
+PATH="$TMP_DIR/bin:$PATH" ENV_FILE="$TMP_DIR/blank.env" HERMES_INSTALL_LIB_ONLY=true \
+HERMES_NAMESPACE=precedence-test HERMES_DASHBOARD_ENABLED=false HERMES_WEBUI_ENABLED=false \
+HERMES_BROWSER_ENABLED=false API_SERVER_KEY=explicit-api-key-long \
+bash -c 'source "$1"; load_env; prepare_paths; prepare_defaults; printf "%s" "$API_SERVER_KEY" | sha256sum | cut -d" " -f1' _ "$ROOT_DIR/install.sh" \
+  > "$TMP_DIR/process-precedence.sha"
+expected_process_sha="$(printf '%s' explicit-api-key-long | sha256sum | cut -d' ' -f1)"
+grep -qx "$expected_process_sha" "$TMP_DIR/process-precedence.sha"
+
 # First installation: missing namespace means all enabled credentials are generated.
 reset_state
 run_resolver fresh
