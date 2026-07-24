@@ -113,6 +113,7 @@ python3 -m py_compile scripts/render_template.py scripts/prepare_requirements.py
 ./tests/profile-composition.sh
 ./tests/configure.sh
 ./tests/matrix.sh
+./tests/credentials.sh
 rm -rf scripts/__pycache__
 ```
 
@@ -147,26 +148,29 @@ If a live cluster is reachable, also run:
 ./doctor.sh
 ```
 
-Do not require a live namespace for purely repo-local documentation/script syntax changes unless the change affects Kubernetes behavior and a cluster is available.
+For purely repo-local documentation changes with no executable examples or behavior claims, a live deployment is not required. For every change that can affect installer behavior, rendered Kubernetes resources, bootstrap, credentials, optional components, authentication, WebUI, Browserless, SSH, Ansible, PVCs, or rollout sequencing, a live Linux/K3s or real-VM test is mandatory. If the required target is unavailable, the work is **blocked**, not successful; do not downgrade the result to a static-only pass.
 
 ## Live K3s profile validation protocol
 
-Changes to profile composition, defaults, bootstrap archives, init behavior, SSH, Ansible, addon requirements, ingress, authentication, or WebUI wiring require a disposable Linux/K3s test when a lab is available. Static rendering alone is not sufficient.
+Changes to profile composition, defaults, bootstrap archives, init behavior, SSH, Ansible, addon requirements, ingress, authentication, credentials, Browserless, or WebUI wiring require a disposable Linux/K3s test or an explicitly approved real test VM. Static rendering, fake-`kubectl`, or Agent-only deployment is never sufficient for these changes.
 
 1. Start from a fresh disposable Linux VM. Record the OS, Kubernetes version, container images, repository commit, CPU, memory, storage, and ingress controller without publishing private hostnames or addresses.
 2. Install K3s, wait for the node, DNS, storage provisioner, metrics server, and Traefik to become ready, and use a lab-only TLS certificate whose names are public-safe placeholders in any committed report.
-3. Deploy `personal-assistant` from a clean namespace and PVCs with all optional components selected. Require all four deployments and the init job to become ready, then run `doctor.sh`.
-4. Verify the personal runtime has exactly `markdown-pdf` and `hermes-workspace-manager`, no generated SSH key, no `/workspace/ansible`, an empty `ANSIBLE_CONFIG`, and no Ansible package. Exercise the Markdown-to-PDF renderer and validate the produced PDF header, page count, and extracted text.
-5. Run the Hermes CLI directly in the Agent container (`hermes --version`) and exercise any changed interactive CLI path through a real TTY. Do not use `sh -lc` as proof of CLI absence because login shells can reset the image `PATH`.
-6. Use real Chromium against the deployed HTTPS ingress. Verify the login page, rejection of an invalid password, acceptance of the configured password, authenticated UI content, a clean authenticated browser console, and a visually inspected screenshot. Curl-only checks do not satisfy WebUI validation.
-7. Rerun `install.sh` for the same personal deployment and prove rollout success, PVC identity preservation, and persistence of a test artifact.
-8. Remove the personal namespace, deploy `universal-system-architect` from clean PVCs, and run `doctor.sh`. Verify all selected skills, persistent SSH key permissions and matching fingerprints, `ANSIBLE_CONFIG`, Ansible version/config, `ansible localhost -m ping`, and compatibility/imports for the full addon requirements.
-9. Repeat the CLI, TLS, invalid/valid Chromium login, authenticated console, and screenshot checks for the architect profile.
-10. Test defaults and explicit overrides separately. At minimum cover environment-only installation with a missing `ENV_FILE`, `HERMES_SSH_SETUP=false`, `HERMES_ANSIBLE_SETUP=false`, custom `HERMES_ANSIBLE_CONFIG`, and explicit-empty `HERMES_ADDON_REQUIREMENTS=`. On a fresh PVC, disabled Ansible must leave no `/workspace/ansible`, no addon Ansible binary, and an empty `ANSIBLE_CONFIG`.
-11. Test an invalid profile and confirm installation fails before Kubernetes resources are changed. Test a custom `HERMES_BOOTSTRAP_DIR` to ensure profile composition does not replace operator-owned bootstrap content.
-12. Delete temporary namespaces and sensitive generated files. Destroy the disposable VM when it is no longer needed. Update the PR with sanitized environment facts, exact pass/fail evidence, fixes made, and remaining limitations; never include internal DNS names, IP addresses, passwords, tokens, certificate keys, or generated credential contents.
+3. Deploy the minimum required matrix from clean namespaces/PVCs: Agent-only, Dashboard, WebUI, Browserless, and full stack. For any change touching shared manifests or installer sequencing, the full-stack case is mandatory. Require every enabled deployment and the init job to become ready; a single healthy Agent does not satisfy this gate.
+4. After every rollout, inspect `get pods`, events, current logs, and `--previous` logs for each enabled deployment. A `CrashLoopBackOff`, startup exit, failed readiness probe, or image/package build failure is a hard failure even if other components are healthy.
+5. Verify the personal runtime has exactly `markdown-pdf` and `hermes-workspace-manager`, no generated SSH key, no `/workspace/ansible`, an empty `ANSIBLE_CONFIG`, and no Ansible package. Exercise the Markdown-to-PDF renderer and validate the produced PDF header, page count, and extracted text.
+6. Run the Hermes CLI directly in the Agent container (`hermes --version`) and exercise any changed interactive CLI path through a real TTY. Do not use `sh -lc` as proof of CLI absence because login shells can reset the image `PATH`.
+7. Use real Chromium against the deployed HTTPS ingress whenever WebUI is enabled. Verify the login page, rejection of an invalid password, acceptance of the configured password, authenticated UI content, a clean authenticated browser console, and a visually inspected screenshot. Curl-only checks do not satisfy WebUI validation.
+8. Rerun `install.sh` unchanged for the same deployment and prove rollout success, Secret hash stability, PVC identity preservation, and persistence of a test artifact.
+9. Remove the personal namespace, deploy `universal-system-architect` from clean PVCs, and run `doctor.sh`. Verify all selected skills, persistent SSH key permissions and matching fingerprints, `ANSIBLE_CONFIG`, Ansible version/config, `ansible localhost -m ping`, and compatibility/imports for the full addon requirements.
+10. Repeat the CLI, TLS, invalid/valid Chromium login, authenticated console, and screenshot checks for the architect profile.
+11. Test defaults and explicit overrides separately. At minimum cover environment-only installation with a missing `ENV_FILE`, `HERMES_SSH_SETUP=false`, `HERMES_ANSIBLE_SETUP=false`, custom `HERMES_ANSIBLE_CONFIG`, and explicit-empty `HERMES_ADDON_REQUIREMENTS=`. On a fresh PVC, disabled Ansible must leave no `/workspace/ansible`, no addon Ansible binary, and an empty `ANSIBLE_CONFIG`.
+12. Test an invalid profile and confirm installation fails before Kubernetes resources are changed. Test a custom `HERMES_BOOTSTRAP_DIR` to ensure profile composition does not replace operator-owned bootstrap content.
+13. Delete temporary namespaces and sensitive generated files. Destroy the disposable VM when it is no longer needed. Update the PR with sanitized environment facts, exact pass/fail evidence, fixes made, and remaining limitations; never include internal DNS names, IP addresses, passwords, tokens, certificate keys, or generated credential contents.
 
-The PR description must distinguish static checks from live deployment, CLI, TLS/authentication, Chromium, idempotency, and cleanup evidence. Never leave an outdated statement such as "No live cluster changed" after performing live validation.
+The PR description must distinguish `static/local`, `render/schema`, `live/cluster`, and `runtime/acceptance` evidence. It must name every required gate and mark unavailable gates as blocked. Never leave an outdated statement such as "No live cluster changed" after performing live validation, and never claim overall success from static or Agent-only evidence when WebUI/optional components are in scope. See [`docs/qa.md`](docs/qa.md) for the repository QA contract.
+
+See [`docs/qa.md`](docs/qa.md) for the mandatory live acceptance matrix, evidence requirements, WebUI crash-loop handling, and explicit blocked-state rules.
 
 ## Git workflow expectations
 
@@ -472,7 +476,7 @@ Be concise, factual, and do not claim tests passed unless they actually ran.
 
 ## API server key pitfall
 
-Hermes Agent refuses to start the API server if `API_SERVER_KEY` is a placeholder or shorter than 16 characters. The installer should never propagate such a value from a local shell/env file into Kubernetes; generate a strong replacement instead.
+Hermes Agent refuses to start the API server if `API_SERVER_KEY` is a placeholder or shorter than 16 characters. The installer must validate the final explicit, reused, or generated value and fail closed for a weak existing Secret; it must not silently rotate an existing credential.
 
 
 ## Kubernetes resource knobs
