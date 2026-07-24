@@ -43,6 +43,7 @@ All notable changes to this project are documented in this file.
 - Adds backup/restore cleanup traps and restores each enabled deployment to its original replica count after success or failure.
 - Ensures the wizard offers configurable Agent, WebUI, and Browserless image references while retaining `latest` as the default.
 - Ensures the wizard and installer never store or print plaintext credentials; successful operations provide Kubernetes Secret extraction commands instead.
+- Updates QA credential acceptance to require Secret-only storage and explicitly reject obsolete local credential-capture-file expectations.
 - Corrects credential, render, and bootstrap artifact paths throughout the documentation for both wizard and manual installations.
 - Corrects optional-component authentication and deployment claims, conditional SSH preparation, and duplicated operational guidance.
 - Clears installer library mode before the wizard hands off to `install.sh`, so answering yes starts the deployment.
